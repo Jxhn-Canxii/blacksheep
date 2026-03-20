@@ -1,0 +1,183 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { useSupabase } from "@/providers/SupabaseProvider";
+import { useUser } from "@/providers/UserProvider";
+import { RiNotification2Line, RiNotification2Fill, RiChatFollowUpLine, RiUserFollowLine, RiAtLine, RiMailLine } from "react-icons/ri";
+import { twMerge } from "tailwind-merge";
+
+const formatTimeAgo = (date: Date) => {
+  const now = new Date();
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+  if (diffInSeconds < 60) return "just now";
+  const diffInMinutes = Math.floor(diffInSeconds / 60);
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+  const diffInDays = Math.floor(diffInHours / 24);
+  if (diffInDays < 7) return `${diffInDays}d ago`;
+  
+  return date.toLocaleDateString();
+};
+
+const Notifications = () => {
+  const { supabase } = useSupabase();
+  const { user } = useUser();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchNotifications = async () => {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select(`
+          *,
+          actor:actor_id (username, avatar_url)
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (!error && data) {
+        setNotifications(data);
+      }
+      setLoading(false);
+    };
+
+    fetchNotifications();
+
+    const channel = supabase
+      .channel('notifications-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, (payload) => {
+        // Fetch full actor info for the new notification
+        supabase
+          .from('profiles')
+          .select('username, avatar_url')
+          .eq('id', payload.new.actor_id)
+          .single()
+          .then(({ data }) => {
+            setNotifications(prev => [{ ...payload.new, actor: data }, ...prev]);
+          });
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, user]);
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  const markAsRead = async (id: string) => {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id);
+
+    if (!error) {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    }
+  };
+
+  const getIcon = (type: string) => {
+    switch (type) {
+      case 'reply': return <RiChatFollowUpLine size={16} className="text-emerald-500" />;
+      case 'follow': return <RiUserFollowLine size={16} className="text-blue-500" />;
+      case 'mention': return <RiAtLine size={16} className="text-purple-500" />;
+      case 'message': return <RiMailLine size={16} className="text-orange-500" />;
+      default: return <RiNotification2Line size={16} />;
+    }
+  };
+
+  const getMessage = (n: any) => {
+    const actorName = n.actor?.username || 'Someone';
+    switch (n.type) {
+      case 'reply': return <span><b className="text-white">@{actorName}</b> resonated with your bubble.</span>;
+      case 'follow': return <span><b className="text-white">@{actorName}</b> is now following your frequency.</span>;
+      case 'mention': return <span><b className="text-white">@{actorName}</b> called your signal.</span>;
+      case 'message': return <span><b className="text-white">@{actorName}</b> sent you a direct message.</span>;
+      default: return <span>Activity from <b className="text-white">@{actorName}</b></span>;
+    }
+  };
+
+  if (!user) return null;
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="relative p-2.5 rounded-xl bg-neutral-900/50 border border-white/5 text-neutral-400 hover:text-emerald-500 transition-all active:scale-95"
+      >
+        {unreadCount > 0 ? <RiNotification2Fill size={20} className="text-emerald-500" /> : <RiNotification2Line size={20} />}
+        {unreadCount > 0 && (
+          <span className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 text-black text-[9px] font-black rounded-full flex items-center justify-center border-2 border-black">
+            {unreadCount}
+          </span>
+        )}
+      </button>
+
+      {isOpen && (
+        <>
+          <div className="fixed inset-0 z-[100]" onClick={() => setIsOpen(false)} />
+          <div className="absolute right-0 mt-3 w-80 bg-neutral-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-[101] overflow-hidden">
+            <div className="p-4 border-b border-white/5 flex items-center justify-between">
+              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Neural Activity</h3>
+              {unreadCount > 0 && (
+                <button 
+                  onClick={() => notifications.forEach(n => !n.is_read && markAsRead(n.id))}
+                  className="text-[9px] font-bold text-emerald-500 hover:underline uppercase tracking-widest"
+                >
+                  Clear All
+                </button>
+              )}
+            </div>
+            
+            <div className="max-h-[400px] overflow-y-auto scrollbar-hide">
+              {loading ? (
+                <div className="p-8 flex justify-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-emerald-500"></div>
+                </div>
+              ) : notifications.length > 0 ? (
+                notifications.map((n) => (
+                  <div
+                    key={n.id}
+                    onClick={() => markAsRead(n.id)}
+                    className={twMerge(
+                      "p-4 border-b border-white/5 flex gap-x-3 cursor-pointer transition-colors",
+                      !n.is_read ? "bg-emerald-500/5 hover:bg-emerald-500/10" : "hover:bg-white/5"
+                    )}
+                  >
+                    <div className="shrink-0 mt-0.5">
+                      {getIcon(n.type)}
+                    </div>
+                    <div className="flex flex-col gap-y-1">
+                      <p className="text-[11px] text-neutral-400 leading-relaxed">
+                        {getMessage(n)}
+                      </p>
+                      <span className="text-[8px] font-mono text-neutral-600 uppercase">
+                        {formatTimeAgo(new Date(n.created_at))}
+                      </span>
+                    </div>
+                    {!n.is_read && (
+                      <div className="ml-auto shrink-0 w-1.5 h-1.5 bg-emerald-500 rounded-full mt-1.5" />
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="p-10 text-center opacity-30">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-neutral-500 italic">No signals detected</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
+
+export default Notifications;

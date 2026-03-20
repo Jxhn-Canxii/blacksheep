@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
 :root {
   --background: #ffffff;
@@ -19,8 +20,149 @@
   }
 }
 
+html {
+  /* Prevent font scaling inconsistencies across browsers */
+  -webkit-text-size-adjust: 100%;
+  -moz-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  
+  /* Use consistent box sizing */
+  box-sizing: border-box;
+
+  /* Scale down base font size on larger monitors to feel more premium and less 'blown up' */
+  font-size: 14px; 
+}
+
+@media (min-width: 1024px) {
+  html {
+     font-size: 13.5px;
+  }
+}
+
+@media (min-width: 1536px) {
+  html {
+     font-size: 13px;
+  }
+}
+
+
+*, *::before, *::after {
+  box-sizing: inherit;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* Use system font stack with Geist fallback */
+  font-family: var(--font-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  
+  /* Optimize for mobile */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  
+  /* Lock horizontal scroll to prevent zoom layout artifacts */
+  overflow-x: hidden;
+  
+  /* Normalize full height behavior */
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* Fix for iOS auto-zoom on input focus */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+
+/* Utilities used across the app (not provided by Tailwind out of the box) */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE/Edge */
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
+/* Glass-like slim scrollbar */
+.glass-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
+}
+
+.glass-scroll::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.glass-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.glass-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(4px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.3s ease;
+}
+
+.glass-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: rgba(16, 185, 129, 0.1);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-spin-slow {
+  animation: spin-slow 8s linear infinite;
+}
+
+@keyframes bounce-slow {
+  0% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+.animate-bounce-slow {
+  animation: bounce-slow 6s ease-in-out infinite;
+}
+
+@keyframes pulse-slow {
+  0% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0.35;
+  }
+}
+.animate-pulse-slow {
+  animation: pulse-slow 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-spin-slow,
+  .animate-bounce-slow,
+  .animate-pulse-slow {
+    animation: none !important;
+  }
 }
