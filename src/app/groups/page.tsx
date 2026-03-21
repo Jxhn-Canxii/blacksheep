@@ -42,13 +42,16 @@ const GroupsPage = () => {
   const { user } = useUser();
   const { supabase } = useSupabase();
   const [groups, setGroups] = useState<Group[]>([]);
+  const [userGroups, setUserGroups] = useState<Group[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
 
   useEffect(() => {
     const fetchGroups = async () => {
+      setLoading(true);
       // Fetch groups with member count and latest 3 member profiles
       const { data, error } = await supabase
         .from('groups')
@@ -64,20 +67,31 @@ const GroupsPage = () => {
         `)
         .order('created_at', { ascending: false });
       
-      if (!error && data) {
-        // Map the data to include counts and limit members locally for the initial fetch
+      if (error) {
+        console.error("Error fetching groups:", error);
+        toast.error("Failed to fetch circles.");
+      } else if (data) {
         const mappedGroups = (data as any[]).map(group => ({
           ...group,
           _count: {
             group_members: group.group_members?.length || 0
-          },
-          // We'll keep all fetched members but display only 3 in UI
+          }
         }));
         setGroups(mappedGroups);
+
+        // If user is logged in, filter groups they belong to
+        if (user) {
+          const userCircleIds = (data as any[])
+            .filter(g => g.group_members?.some((m: any) => m.user_id === user.id))
+            .map(g => g.id);
+          
+          setUserGroups(mappedGroups.filter(g => userCircleIds.includes(g.id)));
+        }
       }
+      setLoading(false);
     };
     fetchGroups();
-  }, [supabase]);
+  }, [supabase, user]);
 
   const filteredGroups = groups.filter(group => 
     group.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -88,25 +102,14 @@ const GroupsPage = () => {
     e.preventDefault();
     if (!user) { toast.error("Identity required to start a circle."); return; }
     if (!name.trim()) { toast.error("A name is required for resonance."); return; }
-    setLoading(true);
+    setCreating(true);
     const { data, error } = await (supabase as any).from("groups").insert([{ name, description, created_by: user.id }]).select().single();
     if (!error && data) {
-      // Ensure the creator is a member of the group (used by group-members UI).
-      const { error: memberError } = await (supabase as any)
-        .from("group_members")
-        .upsert(
-          [{ group_id: data.id, user_id: user.id, status: 'approved', role: 'admin' }],
-          { onConflict: "group_id,user_id" }
-        );
-      if (memberError) {
-        // Membership failing shouldn't block group creation, but it's important for UI.
-        console.error("Error adding creator to group_members:", memberError);
-      }
-
+      // Membership is handled by DB trigger tr_on_group_created
       setName(""); setDescription("");
       toast.success("Circle established.");
       
-      // Fetch the newly created group with members to maintain structure
+      // Refresh groups list
       const { data: newGroup, error: fetchError } = await supabase
         .from('groups')
         .select(`
@@ -123,15 +126,17 @@ const GroupsPage = () => {
         .single();
       
       if (!fetchError && newGroup) {
-        setGroups(prev => [{
+        const mapped = {
           ...newGroup as any,
           _count: { group_members: 1 }
-        }, ...prev]);
+        };
+        setGroups(prev => [mapped, ...prev]);
+        setUserGroups(prev => [mapped, ...prev]);
       }
     } else {
       toast.error(error?.message || "Signal failure.");
     }
-    setLoading(false);
+    setCreating(false);
   };
 
   return (
@@ -190,19 +195,59 @@ const GroupsPage = () => {
                       className="w-full bg-black/40 text-white p-4 min-h-[100px] rounded-xl border border-white/5 outline-none focus:border-emerald-500/30 transition-all text-sm font-medium placeholder:italic placeholder:opacity-30 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50"
                     />
                 </div>
-                <button disabled={loading} type="submit"
+                <button disabled={creating} type="submit"
                   className="bg-emerald-500 text-black py-4 rounded-xl font-black uppercase tracking-[0.2em] text-[10px] hover:bg-emerald-400 transition-all duration-500 disabled:opacity-50 shadow-xl shadow-emerald-500/20 active:scale-95 focus-visible:outline-none"
                 >
-                  {loading ? "Establishing..." : "Open Circle"}
+                  {creating ? "Establishing..." : "Open Circle"}
                 </button>
               </form>
            </div>
+
+           {/* User's Circles List (Group Chat List) */}
+           {user && (
+             <div className="mt-10 space-y-6">
+                <div className="flex items-center gap-x-2 text-neutral-600 font-black uppercase tracking-widest text-[9px] px-2">
+                    <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                    <span>Your Synced Circles</span>
+                </div>
+                <div className="flex flex-col gap-y-2">
+                    {loading ? (
+                        [1,2].map(i => <div key={i} className="h-14 bg-neutral-900/40 animate-pulse rounded-2xl border border-white/5" />)
+                    ) : userGroups.length > 0 ? (
+                        userGroups.map((group) => (
+                            <Link
+                                key={group.id}
+                                href={`/groups/${group.id}`}
+                                className="group flex items-center justify-between p-4 bg-neutral-900/40 hover:bg-emerald-500/10 rounded-2xl border border-white/5 hover:border-emerald-500/30 transition-all text-left"
+                            >
+                                <div className="flex items-center gap-x-3">
+                                    <div className="w-8 h-8 rounded-lg bg-black flex items-center justify-center text-emerald-500 border border-white/5 group-hover:border-emerald-500/20">
+                                        <HiHashtag size={14} />
+                                    </div>
+                                    <span className="text-sm font-black italic uppercase tracking-tight text-neutral-300 group-hover:text-emerald-400 transition-colors truncate max-w-[140px]">
+                                        {group.name}
+                                    </span>
+                                </div>
+                                <HiArrowUpRight size={14} className="text-neutral-700 group-hover:text-emerald-500 transition-colors" />
+                            </Link>
+                        ))
+                    ) : (
+                        <p className="text-[10px] text-neutral-700 font-medium italic px-2 leading-relaxed">
+                            No active neural links to circles yet. Initiate one or join a cluster.
+                        </p>
+                    )}
+                </div>
+             </div>
+           )}
         </div>
 
         {/* Global Spheres Grid */}
         <div className="flex-1">
            <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-y-4">
-               <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Active <span className="text-emerald-500">Clusters</span></h2>
+               <div className="flex flex-col">
+                  <h2 className="text-xl font-black text-white uppercase italic tracking-tighter">Active <span className="text-emerald-500">Clusters</span></h2>
+                  <p className="text-[9px] font-black text-neutral-700 uppercase tracking-widest mt-1">Discover resonance spheres in the collective</p>
+               </div>
                
                {/* Premium Search Bar */}
                <div className="relative w-full md:w-64 group">
@@ -219,62 +264,80 @@ const GroupsPage = () => {
                </div>
            </div>
            
-           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
-            <AnimatePresence>
-                {filteredGroups.map((group, i) => (
-                <motion.div key={group.id} initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: i * 0.05 }}
-                    className="relative group h-[220px]"
-                >
-                    {/* The Entire Card Surface is the Link */}
-                    <Link href={`/groups/${group.id}`} className="absolute inset-0 z-20" />
-                    
-                    <div className="h-full bg-neutral-900/60 p-6 rounded-2xl border border-white/5 group-hover:border-emerald-500/40 group-hover:bg-neutral-900 transition-all duration-500 shadow-xl relative overflow-hidden flex flex-col justify-between">
-                        <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-[40px] pointer-events-none transition-all duration-1000 group-hover:bg-emerald-500/10" />
-                        
-                        <div className="relative z-10">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-x-2 text-emerald-500/60">
-                                    <HiHashtag size={16} className="group-hover:rotate-[30deg] transition-transform" />
-                                    <span className="text-[8px] font-black uppercase tracking-widest">Resonance Sphere</span>
-                                </div>
-                                <div className="px-2 py-0.5 bg-white/5 rounded-full border border-white/5 text-[8px] font-black text-neutral-500 uppercase tracking-widest">
-                                   {group._count?.group_members || 0} Synced
-                                </div>
-                            </div>
-                            <h2 className="text-white text-xl font-black italic uppercase tracking-tighter leading-tight mb-2 group-hover:text-emerald-400 transition-colors line-clamp-1">
-                                {group.name}
-                            </h2>
-                            <p className="text-neutral-500 text-xs line-clamp-3 leading-relaxed font-medium group-hover:text-neutral-400 transition-colors">
-                                {group.description || "The frequency of this sphere is currently silent but welcoming."}
-                            </p>
-                        </div>
-
-                        <div className="relative z-10 flex items-center justify-between mt-4">
-                             <div className="flex -space-x-2">
-                                {group.group_members?.slice(0, 3).map((member, j) => (
-                                    <div key={j} className="w-8 h-8 rounded-lg bg-neutral-800 border-2 border-black flex items-center justify-center text-[8px] font-black text-emerald-500 group-hover:border-emerald-500/20 overflow-hidden">
-                                        {member.profiles?.avatar_url ? (
-                                          <img src={member.profiles.avatar_url} alt={member.profiles.username} className="w-full h-full object-cover" />
-                                        ) : (
-                                          member.profiles?.username?.charAt(0).toUpperCase() || "?"
-                                        )}
-                                    </div>
-                                ))}
-                                {group._count?.group_members && group._count.group_members > 3 && (
-                                  <div className="w-8 h-8 rounded-lg bg-emerald-500 border-2 border-black flex items-center justify-center text-[8px] font-black text-black">
-                                    +{group._count.group_members - 3}
-                                  </div>
-                                )}
-                             </div>
-                             <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-white/20 group-hover:bg-emerald-500 group-hover:text-black transition-all transform group-hover:rotate-[45deg]">
-                                <HiArrowUpRight size={18} />
-                             </div>
-                        </div>
-                    </div>
-                </motion.div>
+           {loading ? (
+             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+                {[1,2,3,4,5,6].map(i => (
+                  <div key={i} className="h-[220px] bg-neutral-900/40 animate-pulse rounded-2xl border border-white/5" />
                 ))}
-            </AnimatePresence>
-           </div>
+             </div>
+           ) : filteredGroups.length > 0 ? (
+             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+              <AnimatePresence>
+                  {filteredGroups.map((group, i) => (
+                  <motion.div key={group.id} initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ delay: i * 0.05 }}
+                      className="relative group h-[220px]"
+                  >
+                      {/* The Entire Card Surface is the Link */}
+                      <Link href={`/groups/${group.id}`} className="absolute inset-0 z-20" />
+                      
+                      <div className="h-full bg-neutral-900/60 p-6 rounded-2xl border border-white/5 group-hover:border-emerald-500/40 group-hover:bg-neutral-900 transition-all duration-500 shadow-xl relative overflow-hidden flex flex-col justify-between">
+                          <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-[40px] pointer-events-none transition-all duration-1000 group-hover:bg-emerald-500/10" />
+                          
+                          <div className="relative z-10">
+                              <div className="flex items-center justify-between mb-4">
+                                  <div className="flex items-center gap-x-2 text-emerald-500/60">
+                                      <HiHashtag size={16} className="group-hover:rotate-[30deg] transition-transform" />
+                                      <span className="text-[8px] font-black uppercase tracking-widest">Resonance Sphere</span>
+                                  </div>
+                                  <div className="px-2 py-0.5 bg-white/5 rounded-full border border-white/5 text-[8px] font-black text-neutral-500 uppercase tracking-widest">
+                                     {group._count?.group_members || 0} Synced
+                                  </div>
+                              </div>
+                              <h2 className="text-white text-xl font-black italic uppercase tracking-tighter leading-tight mb-2 group-hover:text-emerald-400 transition-colors line-clamp-1">
+                                  {group.name}
+                              </h2>
+                              <p className="text-neutral-500 text-xs line-clamp-3 leading-relaxed font-medium group-hover:text-neutral-400 transition-colors">
+                                  {group.description || "The frequency of this sphere is currently silent but welcoming."}
+                              </p>
+                          </div>
+
+                          <div className="relative z-10 flex items-center justify-between mt-4">
+                               <div className="flex -space-x-2">
+                                  {group.group_members?.slice(0, 3).map((member, j) => (
+                                      <div key={j} className="w-8 h-8 rounded-lg bg-neutral-800 border-2 border-black flex items-center justify-center text-[8px] font-black text-emerald-500 group-hover:border-emerald-500/20 overflow-hidden">
+                                          {member.profiles?.avatar_url ? (
+                                            <img src={member.profiles.avatar_url} alt={member.profiles.username} className="w-full h-full object-cover" />
+                                          ) : (
+                                            member.profiles?.username?.charAt(0).toUpperCase() || "?"
+                                          )}
+                                      </div>
+                                  ))}
+                                  {group._count?.group_members && group._count.group_members > 3 && (
+                                    <div className="w-8 h-8 rounded-lg bg-emerald-500 border-2 border-black flex items-center justify-center text-[8px] font-black text-black">
+                                      +{group._count.group_members - 3}
+                                    </div>
+                                  )}
+                               </div>
+                               <div className="w-9 h-9 rounded-xl bg-white/5 flex items-center justify-center text-white/20 group-hover:bg-emerald-500 group-hover:text-black transition-all transform group-hover:rotate-[45deg]">
+                                  <HiArrowUpRight size={18} />
+                               </div>
+                          </div>
+                      </div>
+                  </motion.div>
+                  ))}
+              </AnimatePresence>
+             </div>
+           ) : (
+             <div className="flex flex-col items-center justify-center h-[400px] text-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-neutral-900 flex items-center justify-center border border-white/5">
+                    <MdExplore size={32} className="text-neutral-700" />
+                </div>
+                <div>
+                    <h3 className="text-white font-black uppercase italic tracking-widest">No Clusters Found</h3>
+                    <p className="text-neutral-600 text-xs mt-1">Adjust your search or initiate a new resonance circle.</p>
+                </div>
+             </div>
+           )}
         </div>
       </div>
       

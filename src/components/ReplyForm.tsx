@@ -8,6 +8,8 @@ import { HiReply } from "react-icons/hi";
 
 interface ReplyFormProps {
   vent_id: string;
+  parent_reply_id?: string;
+  onSuccess?: () => void;
 }
 
 /**
@@ -16,14 +18,27 @@ interface ReplyFormProps {
  * Minimal inline form for responding to specific stress bubbles.
  * Designed to fit within expanded cards on the feed or popups.
  */
-const ReplyForm: React.FC<ReplyFormProps> = ({ vent_id }) => {
+const ReplyForm: React.FC<ReplyFormProps> = ({ vent_id, parent_reply_id, onSuccess }) => {
   const { user } = useUser();
   const { supabase } = useSupabase();
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [honeypot, setHoneypot] = useState("");
+  const [lastSubmitTime, setLastSubmitTime] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (honeypot) {
+      console.warn("Bot detected in reply.");
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastSubmitTime < 3000) { // 3 seconds cooldown for replies
+      toast.error("Vibrating too fast. Wait a moment...");
+      return;
+    }
 
     if (!user) {
       toast.error("You must be logged in to reply.");
@@ -35,21 +50,36 @@ const ReplyForm: React.FC<ReplyFormProps> = ({ vent_id }) => {
     setLoading(true);
     const { error } = await (supabase as any)
       .from("replies")
-      .insert([{ content, user_id: user.id, vent_id }]);
+      .insert([{ 
+        content, 
+        user_id: user.id, 
+        vent_id,
+        parent_reply_id: parent_reply_id || null
+      }]);
 
     if (error) {
       toast.error(error.message);
     } else {
       setContent("");
       toast.success("Reply sent!");
-      // Note: VentFeed should have real-time listener for 'replies' if we want them to show up instantly.
-      // For now, at least we stopped the reload.
+      setLastSubmitTime(Date.now());
+      if (onSuccess) onSuccess();
     }
     setLoading(false);
   };
 
   return (
     <form onSubmit={handleSubmit} className="relative group">
+      {/* Honeypot field - bots will fill this */}
+      <input
+        type="text"
+        name="reply_neural_signature"
+        value={honeypot}
+        onChange={(e) => setHoneypot(e.target.value)}
+        className="hidden"
+        tabIndex={-1}
+        autoComplete="off"
+      />
       <textarea
         value={content}
         onChange={(e) => setContent(e.target.value)}

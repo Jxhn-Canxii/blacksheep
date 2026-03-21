@@ -7,6 +7,7 @@ import ModalProvider from "@/providers/ModalProvider";
 import ToasterProvider from "@/providers/ToasterProvider";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
+import PageTransition from "@/components/PageTransition";
 import { createClient } from "@/libs/supabaseServer";
 import { getCachedTrendingFeelings } from "@/libs/cachedQueries";
 
@@ -77,14 +78,18 @@ export default async function RootLayout({
             {user ? (
               <>
                 <Sidebar initialRecentGroups={recentGroups} initialTrendingData={trendingData}>
-                  {children}
+                  <PageTransition>
+                    {children}
+                  </PageTransition>
                 </Sidebar>
                 <MobileNav />
               </>
             ) : (
-              <div className="min-h-screen bg-black">
-                {children}
-              </div>
+              <PageTransition>
+                <div className="min-h-screen bg-black">
+                  {children}
+                </div>
+              </PageTransition>
             )}
           </UserProvider>
         </SupabaseProvider>

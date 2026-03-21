@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { twMerge } from "tailwind-merge";
 import { FaUserAlt } from 'react-icons/fa';
 import toast from 'react-hot-toast';
@@ -83,18 +84,38 @@ const Header: React.FC<HeaderProps> = ({ children, className }) => {
               >
                 Logout
               </Button>
-              <button
-                onClick={() => router.push('/profile')}
+              <Link
+                href="/profile"
                 className="bg-emerald-500 p-2 sm:p-2.5 rounded-xl text-white shadow-lg shadow-emerald-500/20 hover:scale-110 active:scale-90 transition-all duration-300"
                 aria-label="Open profile"
               >
                 <FaUserAlt size={14} className="sm:w-4 sm:h-4" />
-              </button>
+              </Link>
             </div>
           ) : (
             <div className="flex items-center gap-x-3 sm:gap-x-5">
-              <button 
-                onClick={() => router.push('/map')}
+              <Link 
+                href="/"
+                className="
+                  text-emerald-500 
+                  font-black 
+                  uppercase 
+                  tracking-[0.2em] 
+                  text-[9px] sm:text-[10px]
+                  hover:text-emerald-400
+                  transition-all
+                  flex
+                  items-center
+                  gap-x-1.5
+                  group
+                  whitespace-nowrap
+                "
+              >
+                <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-emerald-500 rounded-full group-hover:animate-ping" />
+                Home
+              </Link>
+              <Link 
+                href="/map"
                 className="
                   text-emerald-500 
                   font-black 
@@ -112,7 +133,7 @@ const Header: React.FC<HeaderProps> = ({ children, className }) => {
               >
                 <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-emerald-500 rounded-full group-hover:animate-ping" />
                 Vent Map
-              </button>
+              </Link>
               <div className="h-4 w-[1px] bg-white/10 mx-0.5 sm:mx-1" />
               <button 
                 onClick={authModal.onOpen}

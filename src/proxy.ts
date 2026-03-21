@@ -60,13 +60,40 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  const isDevelopment = process.env.APP_ENV === 'development' || process.env.NODE_ENV === 'development' || request.nextUrl.hostname === 'localhost'
+
   // Security Headers
   supabaseResponse.headers.set('X-DNS-Prefetch-Control', 'on')
-  supabaseResponse.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
-  supabaseResponse.headers.set('X-XSS-Protection', '1; mode=block')
-  supabaseResponse.headers.set('X-Frame-Options', 'SAMEORIGIN')
+  
+  // Only set HSTS in production
+  if (!isDevelopment) {
+    supabaseResponse.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
+  }
+
+  supabaseResponse.headers.set('X-XSS-Protection', '0')
+  supabaseResponse.headers.set('X-Frame-Options', 'DENY')
   supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff')
-  supabaseResponse.headers.set('Referrer-Policy', 'origin-when-cross-origin')
+  supabaseResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  supabaseResponse.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self), browsing-topics=()')
+  
+  // Content Security Policy
+  const cspHeader = `
+    default-src 'self';
+    script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co https://cdnjs.cloudflare.com;
+    style-src 'self' 'unsafe-inline' https://*.supabase.co https://cdnjs.cloudflare.com https://fonts.googleapis.com;
+    img-src 'self' blob: data: https://*.supabase.co https://cdnjs.cloudflare.com https://*.basemaps.cartocdn.com;
+    font-src 'self' https://fonts.gstatic.com;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+    frame-src 'self';
+    object-src 'none';
+    base-uri 'self';
+    form-action 'self';
+    frame-ancestors 'none';
+    block-all-mixed-content;
+    ${isDevelopment ? '' : 'upgrade-insecure-requests;'}
+  `.replace(/\s{2,}/g, ' ').trim();
+
+  supabaseResponse.headers.set('Content-Security-Policy', cspHeader)
 
   return supabaseResponse
 }

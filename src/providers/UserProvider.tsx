@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { User } from '@supabase/supabase-js';
 
 import { useSupabase } from '@/providers/SupabaseProvider';
@@ -25,7 +25,7 @@ export default function UserProvider({ children }: { children: React.ReactNode }
   const [isLoading, setIsLoading] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  const refreshProfile = async () => {
+  const refreshProfile = useCallback(async () => {
     if (!user) return;
     const { data: userDetails } = await supabase
       .from('profiles')
@@ -33,7 +33,7 @@ export default function UserProvider({ children }: { children: React.ReactNode }
       .eq('id', user.id)
       .single();
     setUserDetails(userDetails as UserDetails | null);
-  };
+  }, [user, supabase]);
 
   useEffect(() => {
     if (user) {
@@ -47,16 +47,16 @@ export default function UserProvider({ children }: { children: React.ReactNode }
       setIsLoading(false);
       setIsLoggingIn(false);
     }
-  }, [user, supabase]);
+  }, [user, refreshProfile]);
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     userDetails,
     isLoading,
     isLoggingIn,
     setIsLoggingIn,
     refreshProfile,
-  };
+  }), [user, userDetails, isLoading, isLoggingIn, refreshProfile]);
 
   return (
     <UserContext.Provider value={value}>

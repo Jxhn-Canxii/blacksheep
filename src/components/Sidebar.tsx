@@ -60,8 +60,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         .eq('status', 'approved')
         .limit(5);
       
-      if (!error && data) {
-        setRecentGroups(data.map((item: any) => item.groups));
+      if (error) {
+        console.error("Error fetching recent circles:", error);
+        setRecentGroups([]);
+      } else if (data) {
+        setRecentGroups(data.map((item: any) => item.groups).filter(Boolean));
       }
       setLoadingGroups(false);
     };
@@ -167,14 +170,14 @@ const Sidebar: React.FC<SidebarProps> = ({
                             </div>
                         ) : recentGroups.length > 0 ? (
                             recentGroups.map((group) => (
-                                <button
+                                <Link
                                     key={group.id}
-                                    onClick={() => router.push(`/groups/${group.id}`)}
+                                    href={`/groups/${group.id}`}
                                     className="flex items-center gap-x-2 text-[10px] font-bold text-neutral-400 hover:text-emerald-500 transition-colors uppercase tracking-tight text-left"
                                 >
                                     <HiHashtag size={10} className="text-neutral-600" />
                                     <span className="truncate">{group.name}</span>
-                                </button>
+                                </Link>
                             ))
                         ) : (
                             <p className="text-[9px] text-neutral-700 font-medium italic leading-relaxed">

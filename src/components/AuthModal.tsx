@@ -34,7 +34,7 @@ const AuthModal = () => {
   return (
     <Modal 
       title="Welcome back"
-      description="Synchronize your neural link."
+      description="Login to your account."
       isOpen={isOpen}
       onChange={onChange}
     >

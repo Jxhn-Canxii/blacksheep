@@ -55,10 +55,23 @@ const VentForm = () => {
   const [content, setContent] = useState("");
   const [emotion, setEmotion] = useState("");
   const [loading, setLoading] = useState(false);
+  const [honeypot, setHoneypot] = useState("");
+  const [lastSubmitTime, setLastSubmitTime] = useState(0);
 
   // Handles the submission of the vent form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (honeypot) {
+      console.warn("Bot detected via honeypot.");
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastSubmitTime < 10000) { // 10 seconds cooldown
+      toast.error("Vibrating too fast. Wait a moment...");
+      return;
+    }
 
     if (!user) {
       toast.error("You must be logged in to post a vent.");
@@ -93,6 +106,7 @@ const VentForm = () => {
             toast.success("Vent released!");
             setContent("");
             setEmotion("");
+            setLastSubmitTime(Date.now());
           }
           setLoading(false);
         },
@@ -108,6 +122,7 @@ const VentForm = () => {
             toast.success("Vent released (without location)!");
             setContent("");
             setEmotion("");
+            setLastSubmitTime(Date.now());
           }
           setLoading(false);
         }
@@ -139,6 +154,17 @@ const VentForm = () => {
             <RiBubbleChartFill size={18} className="animate-pulse" />
             <h2>Blowing a Bubble</h2>
           </div>
+
+          {/* Honeypot field - bots will fill this */}
+          <input
+            type="text"
+            name="neural_signature"
+            value={honeypot}
+            onChange={(e) => setHoneypot(e.target.value)}
+            className="hidden"
+            tabIndex={-1}
+            autoComplete="off"
+          />
 
           <textarea
             value={content}

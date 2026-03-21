@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, memo } from "react";
+import { useEffect, useState, useRef, memo, useCallback } from "react";
 import { useUser } from "@/providers/UserProvider";
 import { useSupabase } from "@/providers/SupabaseProvider";
 import { motion, AnimatePresence } from "framer-motion";
@@ -95,7 +95,7 @@ type RealtimeInsertPayload<TNew> = {
 
 export default function GroupChatClient({ groupId }: { groupId: string }) {
   const router = useRouter();
-  const { user } = useUser();
+  const { user, userDetails } = useUser();
   const { supabase } = useSupabase();
 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -106,6 +106,11 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
   const [groupName, setGroupName] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [offset, setOffset] = useState(0);
+  const [honeypot, setHoneypot] = useState("");
+  const [lastSubmitTime, setLastSubmitTime] = useState(0);
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [isMembersModalOpen, setIsMembersModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -113,6 +118,9 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
   const [searching, setSearching] = useState(false);
   const [pendingMembers, setPendingMembers] = useState<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const initialLoadRef = useRef(true);
+
+  const LIMIT = 20;
 
   // Fetch pending members if user is admin/moderator
   useEffect(() => {
@@ -193,7 +201,7 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
   }, [supabase, groupId, isInvalidGroupId, user?.id]);
 
   // Request to join the group
-  const handleRequestJoin = async () => {
+  const handleRequestJoin = useCallback(async () => {
     if (!user) {
       toast.error("Sign in to request joining this circle.");
       return;
@@ -210,19 +218,16 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       setIsMember(true);
       setMembershipStatus('pending');
     }
-  };
+  }, [user, supabase, groupId]);
 
   // Approve a member (Admin only)
-  const approveMember = async (targetUserId: string) => {
-    console.log(`Approving member: ${targetUserId} in group: ${groupId}`);
-    console.log(`Current user role: ${userRole}`);
-    
+  const approveMember = useCallback(async (targetUserId: string) => {
     if (userRole !== 'admin' && userRole !== 'moderator') {
       toast.error("You don't have permission to approve members.");
       return;
     }
 
-    const { data, error, count } = await supabase
+    const { data, error } = await supabase
       .from("group_members")
       .update({ status: 'approved' })
       .eq("group_id", groupId)
@@ -230,13 +235,8 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       .select();
 
     if (error) {
-      console.error("Error approving member:", error);
       toast.error("Failed to approve member.");
-    } else if (!data || data.length === 0) {
-      console.warn("No rows updated in group_members. This might be an RLS issue.");
-      toast.error("Permission denied or record not found.");
     } else {
-      console.log("Member approved successfully", data[0]);
       toast.success("Member approved!");
       // Refresh member lists
       const { data: memberData } = await supabase
@@ -246,24 +246,15 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
         .eq("status", "approved");
       
       if (memberData) {
-        const mappedMembers = memberData.map((m: any) => ({ ...m.profiles, role: m.role }));
-        console.log("Updated members list:", mappedMembers);
-        setMembers(mappedMembers);
+        setMembers(memberData.map((m: any) => ({ ...m.profiles, role: m.role })));
       }
       
-      setPendingMembers(prev => {
-        const updated = prev.filter(m => m.id !== targetUserId);
-        console.log("Updated pending list:", updated);
-        return updated;
-      });
+      setPendingMembers(prev => prev.filter(m => m.id !== targetUserId));
     }
-  };
+  }, [userRole, supabase, groupId]);
 
   // Update a member's role (Admin only)
-  const updateMemberRole = async (targetUserId: string, newRole: 'admin' | 'moderator' | 'member') => {
-    console.log(`Updating member role: ${targetUserId} to ${newRole}`);
-    console.log(`Current user role: ${userRole}`);
-
+  const updateMemberRole = useCallback(async (targetUserId: string, newRole: 'admin' | 'moderator' | 'member') => {
     if (userRole !== 'admin') {
       toast.error("Only the creator/admin can assign roles.");
       return;
@@ -277,13 +268,8 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       .select();
 
     if (error) {
-      console.error("Error updating member role:", error);
       toast.error(`Failed to update role to ${newRole}.`);
-    } else if (!data || data.length === 0) {
-      console.warn("No rows updated in group_members. This might be an RLS issue.");
-      toast.error("Permission denied or record not found.");
     } else {
-      console.log("Member role updated successfully", data[0]);
       toast.success(`User promoted to ${newRole}!`);
       // Refresh member list
       const { data: memberData } = await supabase
@@ -293,42 +279,34 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
         .eq("status", "approved");
       
       if (memberData) {
-        const mappedMembers = memberData.map((m: any) => ({ ...m.profiles, role: m.role }));
-        console.log("Updated members list:", mappedMembers);
-        setMembers(mappedMembers);
+        setMembers(memberData.map((m: any) => ({ ...m.profiles, role: m.role })));
       }
     }
-  };
+  }, [userRole, supabase, groupId]);
 
   // Remove a member (Admin/Moderator only)
-  const removeMember = async (targetUserId: string) => {
+  const removeMember = useCallback(async (targetUserId: string) => {
     if (userRole !== 'admin' && userRole !== 'moderator') {
       toast.error("You don't have permission to remove members.");
       return;
     }
 
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("group_members")
       .delete()
       .eq("group_id", groupId)
-      .eq("user_id", targetUserId)
-      .select();
+      .eq("user_id", targetUserId);
 
     if (error) {
-      console.error("Error removing member:", error);
       toast.error("Failed to remove member.");
-    } else if (!data || data.length === 0) {
-      console.warn("No rows deleted in group_members. This might be an RLS issue.");
-      toast.error("Permission denied or record not found.");
     } else {
-      console.log("Member removed successfully", data[0]);
       toast.success("Member removed from circle.");
       setMembers(prev => prev.filter(m => m.id !== targetUserId));
     }
-  };
+  }, [userRole, supabase, groupId]);
 
   // Search for users to add to the group
-  const handleSearch = async (e: React.FormEvent) => {
+  const handleSearch = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
@@ -345,10 +323,10 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       setSearchResults(data || []);
     }
     setSearching(false);
-  };
+  }, [searchQuery, supabase]);
 
   // Add a user to the group
-  const addMember = async (targetUserId: string) => {
+  const addMember = useCallback(async (targetUserId: string) => {
     const { error } = await supabase
       .from("group_members")
       .insert([{ group_id: groupId, user_id: targetUserId }]);
@@ -365,40 +343,91 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       setSearchQuery("");
       setSearchResults([]);
     }
-  };
+  }, [supabase, groupId]);
 
-  useEffect(() => {
+  // Helper to scroll to bottom
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
     if (scrollRef.current) {
       scrollRef.current.scrollTo({
         top: scrollRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior,
       });
     }
-  }, [messages]);
+  }, []);
 
+  // Scroll to bottom on initial messages load
   useEffect(() => {
-    const fetchMessages = async () => {
-      if (isInvalidGroupId || membershipStatus !== 'approved') {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
+    if (messages.length > 0 && initialLoadRef.current) {
+      scrollToBottom("auto");
+      initialLoadRef.current = false;
+    }
+  }, [messages, scrollToBottom]);
+
+  // Handle pagination when scrolling up
+  const handleScroll = useCallback(async () => {
+    if (!scrollRef.current || loadingMore || !hasMore) return;
+
+    const { scrollTop } = scrollRef.current;
+    
+    // If we are at the top (or very close)
+    if (scrollTop < 50) {
+      const currentScrollHeight = scrollRef.current.scrollHeight;
+      
+      setLoadingMore(true);
+      const nextOffset = offset + LIMIT;
+      
       try {
-        const res = await fetch(`/api/groups/${groupId}/messages`);
+        const res = await fetch(`/api/groups/${groupId}/messages?limit=${LIMIT}&offset=${nextOffset}`);
         if (res.ok) {
-          const data = await res.json();
-          console.log(`Fetched ${data.length} messages for group ${groupId}`);
-          setMessages(data);
-        } else {
-          console.error(`Failed to fetch messages: ${res.status}`);
+          const newMessages = await res.json();
+          if (newMessages.length < LIMIT) setHasMore(false);
+          
+          if (newMessages.length > 0) {
+            setMessages(prev => [...newMessages, ...prev]);
+            setOffset(nextOffset);
+            
+            // Maintain scroll position after prepending messages
+            requestAnimationFrame(() => {
+              if (scrollRef.current) {
+                const newScrollHeight = scrollRef.current.scrollHeight;
+                scrollRef.current.scrollTop = newScrollHeight - currentScrollHeight;
+              }
+            });
+          }
         }
       } catch (err) {
-        console.error("Error fetching messages:", err);
+        console.error("Error loading more messages:", err);
+      } finally {
+        setLoadingMore(false);
       }
-      setLoading(false);
-    };
+    }
+  }, [groupId, offset, hasMore, loadingMore]);
 
-    fetchMessages();
+  // Fetch initial messages
+  const fetchInitialMessages = useCallback(async () => {
+    if (isInvalidGroupId || membershipStatus !== 'approved') {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/groups/${groupId}/messages?limit=${LIMIT}&offset=0`);
+      if (res.ok) {
+        const data = await res.json();
+        console.log(`Fetched ${data.length} messages for group ${groupId}`);
+        setMessages(data);
+        if (data.length < LIMIT) setHasMore(false);
+      } else {
+        console.error(`Failed to fetch messages: ${res.status}`);
+      }
+    } catch (err) {
+      console.error("Error fetching messages:", err);
+    }
+    setLoading(false);
+  }, [groupId, isInvalidGroupId, membershipStatus]);
+
+  useEffect(() => {
+    fetchInitialMessages();
 
     if (isInvalidGroupId || membershipStatus !== 'approved') return;
 
@@ -417,20 +446,37 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
 
           const { data: profile } = await supabase
             .from("profiles")
-            .select("username")
+            .select("username, avatar_url")
             .eq("id", payload.new.user_id)
             .single();
 
-          setMessages((prev) => [
-            ...prev,
-            {
-              id: payload.new.id,
-              created_at: payload.new.created_at,
-              content: payload.new.content,
-              user_id: payload.new.user_id,
-              profiles: profile,
-            },
-          ]);
+          setMessages((prev) => {
+            const filtered = prev.filter(m => 
+              !(m.user_id === payload.new.user_id && m.content === payload.new.content && m.id.length > 30)
+            );
+            
+            const updated = [
+              ...filtered,
+              {
+                id: payload.new.id,
+                created_at: payload.new.created_at,
+                content: payload.new.content,
+                user_id: payload.new.user_id,
+                profiles: profile,
+              },
+            ];
+
+            // If we are already near the bottom, scroll to the new message
+            if (scrollRef.current) {
+              const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+              const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
+              if (isNearBottom) {
+                setTimeout(() => scrollToBottom(), 100);
+              }
+            }
+
+            return updated;
+          });
         },
       )
       .subscribe();
@@ -438,12 +484,24 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, groupId, isInvalidGroupId, membershipStatus]);
+  }, [supabase, groupId, isInvalidGroupId, membershipStatus, fetchInitialMessages, scrollToBottom]);
 
   // No longer needed, as we have checkMembershipAndFetchMembers above.
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (honeypot) {
+      console.warn("Bot detected in group chat.");
+      return;
+    }
+
+    const now = Date.now();
+    if (now - lastSubmitTime < 1000) { // Reduced to 1 second for smoother feel
+      toast.error("Vibrating too fast. Wait a moment...");
+      return;
+    }
+
     if (!user) {
       toast.error("Sign in to resonate.");
       return;
@@ -454,14 +512,43 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
     const content = newMessage;
     setNewMessage("");
 
-    const res = await fetch(`/api/groups/${groupId}/messages`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, user_id: user.id }),
-    });
+    // Optimistic Update
+    const tempId = crypto.randomUUID();
+    const optimisticMessage: Message = {
+      id: tempId,
+      created_at: new Date().toISOString(),
+      content: content,
+      user_id: user.id,
+      profiles: {
+        username: userDetails?.username || "me",
+        avatar_url: userDetails?.avatar_url || null,
+      },
+    };
 
-    if (!res.ok) {
-      toast.error("Signal lost.");
+    setMessages((prev) => [...prev, optimisticMessage]);
+    setTimeout(() => scrollToBottom(), 50);
+
+    try {
+      const res = await fetch(`/api/groups/${groupId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, user_id: user.id }),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.text();
+        console.error("Failed to send message:", errorData);
+        toast.error("Signal lost. Reconnecting...");
+        // Remove optimistic message and restore input
+        setMessages((prev) => prev.filter((m) => m.id !== tempId));
+        setNewMessage(content);
+      } else {
+        setLastSubmitTime(Date.now());
+      }
+    } catch (err) {
+      console.error("Error sending message:", err);
+      toast.error("Neural link interrupted.");
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
       setNewMessage(content);
     }
   };
@@ -648,9 +735,16 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       {/* Experimental Chat Feed */}
       <div
         ref={scrollRef}
+        onScroll={handleScroll}
         className="flex-1 overflow-y-auto p-4 space-y-8 glass-scroll bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] bg-opacity-5"
       >
         <AnimatePresence>
+          {loadingMore && (
+            <div className="w-full flex justify-center py-4">
+              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-emerald-500" />
+            </div>
+          )}
+          
           {messages.length === 0 && !loading ? (
             <div className="h-full flex flex-col items-center justify-center text-neutral-800 gap-y-4">
               <HiChatBubbleBottomCenterText size={64} className="opacity-5 animate-bounce-slow" />
@@ -674,13 +768,23 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
 
       {/* Glass-Docked Message Input */}
       <div className="p-4 bg-neutral-900/80 backdrop-blur-3xl border-t border-white/5 z-30">
-        <form onSubmit={handleSubmit} className="flex gap-x-3 items-center">
+        <form onSubmit={handleSubmit} className="relative z-20 flex gap-x-3 items-center">
           <div className="flex-1 relative group">
+            {/* Honeypot field - bots will fill this */}
+            <input
+              type="text"
+              name="chat_neural_signature"
+              value={honeypot}
+              onChange={(e) => setHoneypot(e.target.value)}
+              className="hidden"
+              tabIndex={-1}
+              autoComplete="off"
+            />
             <input
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Synchronize your stress..."
+              placeholder="Resonate with the circle..."
               aria-label="Circle message"
               className="w-full bg-black/60 text-white p-4 rounded-xl border border-white/5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50 focus:border-emerald-500/30 transition-all text-sm font-medium shadow-inner placeholder:text-neutral-700 placeholder:italic"
             />

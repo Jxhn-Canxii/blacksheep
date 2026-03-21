@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useSupabase } from "@/providers/SupabaseProvider";
 import { useUser } from "@/providers/UserProvider";
 import { motion, AnimatePresence } from "framer-motion";
@@ -58,32 +58,33 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
   const [loading, setLoading] = useState(true);
   const [geoStatus, setGeoStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [geoError, setGeoError] = useState<string | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    const fetchVents = async () => {
-      setLoading(true);
-      let query = (supabase as any)
-        .from('vents')
-        .select('*, profiles (username), replies (content, created_at, profiles (username))')
-        .not('location', 'is', null);
-      
-      if (view === "private" && user) {
-        // In private map, we show all but maybe user wants specific filtering later.
-        // For now, let's keep it consistent with public but show real identities.
-      }
+    setIsMounted(true);
+  }, []);
 
-      const { data, error } = await query;
-      
-      if (!error && data) {
-        setVents(data);
-      }
+  const fetchVents = useCallback(async () => {
+    setLoading(true);
+    let query = (supabase as any)
+      .from('vents')
+      .select('*, profiles (username), replies (content, created_at, profiles (username))')
+      .not('location', 'is', null);
+    
+    const { data, error } = await query;
+    
+    if (!error && data) {
+      setVents(data);
+    }
 
-      setLoading(false);
-    };
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!isMounted) return;
 
     fetchVents();
 
-    // Auto-detect user geolocation for centering
     if (navigator.geolocation) {
       setGeoStatus("loading");
       navigator.geolocation.getCurrentPosition(
@@ -98,7 +99,6 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
       );
     }
 
-    // Real-time synchronization
     const channel = supabase
       .channel(`world-acoustics-${view}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vents' }, async (p) => {
@@ -117,9 +117,9 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [supabase, view, user]);
+  }, [supabase, view, isMounted, fetchVents]);
 
-  const createBubbleIcon = (emotion: string, replyCount: number) => {
+  const createBubbleIcon = useCallback((emotion: string, replyCount: number) => {
     return L.divIcon({
       className: 'custom-bubble-icon',
       html: `
@@ -137,11 +137,36 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
       iconSize: [48, 48],
       iconAnchor: [24, 24]
     });
-  };
+  }, [view]);
+
+  const handleLocateMe = useCallback(() => {
+    if (!navigator.geolocation) return;
+    setGeoStatus("loading");
+    setGeoError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation([pos.coords.latitude, pos.coords.longitude]);
+        setGeoStatus("ready");
+      },
+      (err) => {
+        setGeoStatus("error");
+        setGeoError(err.message || "Location unavailable");
+      }
+    );
+  }, []);
+
+  if (!isMounted) {
+    return (
+      <div className="h-full w-full bg-neutral-900 animate-pulse rounded-[3rem] flex items-center justify-center min-h-[400px]">
+        <p className="text-neutral-500 font-black uppercase tracking-[0.5em] italic">Initializing Grid...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full w-full relative flex flex-col min-h-[400px]">
       <MapContainer
+        key={view}
         center={[20, 0]}
         zoom={3}
         className="flex-1 w-full rounded-[3.5rem] overflow-hidden border border-white/5 shadow-inner"
@@ -175,7 +200,7 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
                     <div className="flex items-center justify-between border-b border-white/5 pb-4 relative z-10">
                         <div className="flex flex-col">
                             <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest leading-none">@{displayName}</span>
-                            <span className="text-[8px] font-bold text-neutral-500 uppercase tracking-tighter mt-1">{view === "public" ? "ANONYMOUS SIGNAL" : "ECHOING FROM WORLD"}</span>
+                            <span className="text-[8px] font-bold text-neutral-500 uppercase tracking-tighter mt-1">{view === "public" ? "Public" : "Private"}</span>
                         </div>
                         {view === "private" && replyCount > 0 && (
                             <div className="flex items-center gap-x-2 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">
@@ -188,19 +213,30 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
                         "{vent.content}"
                     </p>
 
-                    {/* Show existing replies only in private view */}
-                    {view === "private" && vent.replies && vent.replies.length > 0 && (
-                        <div className="space-y-3 max-h-[150px] overflow-y-auto scrollbar-hide border-t border-white/5 pt-4 relative z-10">
-                            {vent.replies.map((reply: any, idx: number) => (
-                                <div key={idx} className="bg-white/5 p-3 rounded-2xl border border-white/5">
-                                    <div className="flex items-center gap-x-2 mb-1">
-                                        <span className="text-[8px] font-black text-emerald-500 uppercase">@{reply.profiles?.username || 'user'}</span>
-                                    </div>
-                                    <p className="text-[11px] text-neutral-300 leading-snug">{reply.content}</p>
+                    {/* Show ONLY the latest reply in private view */}
+                    {view === "private" && vent.replies && vent.replies.length > 0 && (() => {
+                        // Sort by created_at descending and pick the first one
+                        const latestReply = [...vent.replies].sort((a: any, b: any) => 
+                          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                        )[0];
+                        
+                        return (
+                            <div className="border-t border-white/5 pt-4 relative z-10">
+                                <div className="flex items-center gap-x-2 mb-2">
+                                    <span className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Latest Resonance</span>
                                 </div>
-                            ))}
-                        </div>
-                    )}
+                                <div className="bg-white/5 p-3 rounded-2xl border border-emerald-500/10 shadow-lg">
+                                    <div className="flex items-center gap-x-2 mb-1">
+                                        <span className="text-[8px] font-black text-emerald-500 uppercase transition-all">@{latestReply.profiles?.username || 'user'}</span>
+                                        <span className="text-[7px] text-neutral-700 font-mono italic ml-auto">
+                                          {new Date(latestReply.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-neutral-300 leading-relaxed italic">"{latestReply.content}"</p>
+                                </div>
+                            </div>
+                        );
+                    })()}
 
                     {/* Show reply form only in private view */}
                     {view === "private" && (
@@ -225,21 +261,7 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
           type="button"
           aria-label="Locate me"
           disabled={geoStatus === "loading"}
-          onClick={() => {
-            if (!navigator.geolocation) return;
-            setGeoStatus("loading");
-            setGeoError(null);
-            navigator.geolocation.getCurrentPosition(
-              (pos) => {
-                setUserLocation([pos.coords.latitude, pos.coords.longitude]);
-                setGeoStatus("ready");
-              },
-              (err) => {
-                setGeoStatus("error");
-                setGeoError(err.message || "Location unavailable");
-              }
-            );
-          }}
+          onClick={handleLocateMe}
           className="pointer-events-auto bg-neutral-900/60 backdrop-blur-3xl p-4 rounded-[2rem] border border-white/10 shadow-3xl text-white hover:border-emerald-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="flex items-center gap-x-2">

@@ -7,6 +7,16 @@ import { HiSparkles } from "react-icons/hi2";
 import Header from "./Header";
 import { twMerge } from "tailwind-merge";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+
+const Map = dynamic(() => import("./Map"), { 
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full bg-neutral-900 animate-pulse rounded-[3rem] flex items-center justify-center min-h-[400px]">
+      <p className="text-neutral-500 font-black uppercase tracking-[0.5em] italic">Initializing Grid...</p>
+    </div>
+  )
+});
 
 const FEATURES = [
   {
@@ -134,6 +144,38 @@ const LandingClient = () => {
             </motion.div>
           ))}
         </div>
+
+        {/* Public Vent Map - Guest Experience */}
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="w-full pt-20 space-y-10"
+        >
+          <div className="flex flex-col items-center gap-y-2">
+            <RiCompass3Line size={32} className="text-emerald-500/30 animate-pulse" />
+            <h2 className="text-white text-4xl font-black italic tracking-tighter uppercase">Public <span className="text-emerald-500">Grid</span></h2>
+            <p className="text-neutral-600 text-[10px] font-black uppercase tracking-[0.4em]">Observe anonymized emotional signals</p>
+          </div>
+
+          <div className="w-full h-[500px] rounded-[3rem] overflow-hidden border border-white/5 shadow-2xl relative group">
+            <Map view="public" />
+            <div className="absolute inset-0 bg-neutral-950/20 pointer-events-none group-hover:bg-transparent transition-all duration-700" />
+            
+            {/* Call to action overlay for map */}
+            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 w-full max-w-xs px-4">
+              <div className="bg-black/80 backdrop-blur-xl p-4 rounded-2xl border border-white/10 shadow-3xl text-center space-y-3">
+                <p className="text-neutral-400 text-[10px] font-medium italic">"Establish a private link to see real identities."</p>
+                <button 
+                  onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                  className="w-full bg-emerald-500 text-black py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all"
+                >
+                  Sync Now
+                </button>
+              </div>
+            </div>
+          </div>
+        </motion.div>
 
         {/* Public Feed Preview / Teaser */}
         <motion.div
