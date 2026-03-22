@@ -2,9 +2,10 @@
 
 import { usePathname } from "next/navigation";
 import { useMemo } from "react";
-import { HiHome, HiChatBubbleLeftRight, HiUsers, HiOutlineCog6Tooth, HiOutlineUser } from "react-icons/hi2";
+import { HiHome, HiChatBubbleLeftRight, HiUsers, HiOutlineUser } from "react-icons/hi2";
 import { BiSearch } from "react-icons/bi";
-import { MdExplore, MdGroup } from "react-icons/md";
+import { MdGroup } from "react-icons/md";
+import { RiBroadcastLine, RiLineChartFill } from "react-icons/ri";
 import Link from "next/link";
 import { twMerge } from "tailwind-merge";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
@@ -28,25 +29,13 @@ const MobileNav = () => {
       href: '/',
     },
     {
-      icon: BiSearch,
-      label: 'Explore',
-      active: pathname === '/search',
-      href: '/search',
-    },
-    {
       icon: HiUsers,
       label: 'Profiles',
       active: pathname === '/profiles',
       href: '/profiles',
     },
     {
-      icon: MdExplore,
-      label: 'Map',
-      active: pathname === '/map',
-      href: '/map',
-    },
-    {
-      icon: HiChatBubbleLeftRight,
+      icon: RiBroadcastLine,
       label: 'Global',
       active: pathname === '/chat',
       href: '/chat',
@@ -57,6 +46,12 @@ const MobileNav = () => {
       active: pathname === '/chat/dm',
       href: '/chat/dm',
       count: unreadCount,
+    },
+    {
+      icon: RiLineChartFill,
+      label: 'Ledger',
+      active: pathname === '/profile/ledger',
+      href: '/profile/ledger',
     },
     {
       icon: MdGroup,

@@ -1,15 +1,18 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { useMemo, useEffect, useState } from "react";
-import { HiHome, HiChatBubbleLeftRight, HiUsers, HiOutlineCog6Tooth, HiHashtag, HiOutlineUser } from "react-icons/hi2";
+import { useMemo, useEffect, useState, useCallback } from "react";
+import Link from "next/link";
+import { HiHome, HiChatBubbleLeftRight, HiUsers, HiHashtag, HiOutlineUser, HiOutlineBookOpen, HiOutlineArrowRightOnRectangle } from "react-icons/hi2";
 import { BiSearchAlt } from "react-icons/bi";
-import { MdOutlineTravelExplore, MdGroups2 } from "react-icons/md";
+import { MdGroups2 } from "react-icons/md";
+import { RiLineChartFill, RiBroadcastLine } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
 
 import SidebarItem from "./SidebarItem";
 import Box from "./Box";
 import TrendingFeelings from "./TrendingFeelings";
+import RecommendedSignals from "./RecommendedSignals";
 import { useUser } from "@/providers/UserProvider";
 import { useSupabase } from "@/providers/SupabaseProvider";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
@@ -80,25 +83,13 @@ const Sidebar: React.FC<SidebarProps> = ({
       href: '/',
     },
     {
-      icon: BiSearchAlt,
-      label: 'Explore',
-      active: pathname === '/search',
-      href: '/search',
-    },
-    {
       icon: HiUsers,
       label: 'Profiles',
       active: pathname === '/profiles',
       href: '/profiles',
     },
     {
-      icon: MdOutlineTravelExplore,
-      label: 'Map',
-      active: pathname === '/map',
-      href: '/map',
-    },
-    {
-      icon: HiChatBubbleLeftRight,
+      icon: RiBroadcastLine,
       label: 'Global',
       active: pathname === '/chat',
       href: '/chat',
@@ -115,6 +106,12 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: 'Circles',
       active: pathname === '/groups',
       href: '/groups',
+    },
+    {
+      icon: RiLineChartFill,
+      label: 'Ledger',
+      active: pathname === '/profile/ledger',
+      href: '/profile/ledger',
     },
     {
       icon: HiOutlineUser,
@@ -156,6 +153,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         <Box className="flex-1 bg-neutral-900/40 backdrop-blur-2xl border border-white/5 shadow-2xl overflow-y-auto glass-scroll">
             <div className="p-3 space-y-6">
                 <TrendingFeelings initialData={initialTrendingData} />
+                
+                <RecommendedSignals />
                 
                 <div className="space-y-3">
                     <div className="flex items-center gap-x-2 text-neutral-600 font-black uppercase tracking-widest text-[9px] mb-1 px-1">

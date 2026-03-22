@@ -5,43 +5,12 @@ import { useUser } from "@/providers/UserProvider";
 import { useSupabase } from "@/providers/SupabaseProvider";
 import { toast } from "react-hot-toast";
 import { motion, AnimatePresence } from "framer-motion";
-import { RiBubbleChartFill } from "react-icons/ri";
+import { RiBubbleChartFill, RiCompass3Line } from "react-icons/ri";
+import { HiSparkles } from "react-icons/hi2";
 import { twMerge } from "tailwind-merge";
+import { getEmotionColor, FEELINGS } from "@/libs/emotionColors";
 
 import TrendingFeelings from "./TrendingFeelings";
-
-const FEELINGS = [
-  "Anxious",
-  "Angry",
-  "Overwhelmed",
-  "Sad",
-  "Numb",
-  "Restless",
-  "Lonely",
-  "Exhausted",
-  "Stressed",
-  "Frustrated",
-  "Guilty",
-  "Hopeless",
-  "Uncertain",
-  "Burnt Out",
-  "Tense",
-  "Disconnected",
-  "Worried",
-  "Tired",
-  "Melancholy",
-  "Apathetic",
-  "Insecure",
-  "Betrayed",
-  "Grieving",
-  "Pressure",
-  "Isolated",
-  "Misunderstood",
-  "Suffocated",
-  "Lost",
-  "Fragile",
-  "Invisible"
-];
 
 /**
  * VentForm Component
@@ -90,46 +59,37 @@ const VentForm = () => {
 
     setLoading(true);
 
+    const postVent = async (location?: { latitude: number, longitude: number }) => {
+        const { error } = await (supabase as any)
+            .from("vents")
+            .insert([{ content, emotion, user_id: user.id, location }]);
+
+        if (error) {
+            toast.error(error.message);
+        } else {
+            toast.success("Signal synchronized to global grid!");
+            setContent("");
+            setEmotion("");
+            setLastSubmitTime(Date.now());
+        }
+        setLoading(false);
+    };
+
+    // AUTOMATIC GEOLOCATION PROTOCOL with permission check
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-          const location = { latitude, longitude };
-
-          const { error } = await (supabase as any)
-            .from("vents")
-            .insert([{ content, emotion, user_id: user.id, location }]);
-
-          if (error) {
-            toast.error(error.message);
-          } else {
-            toast.success("Vent released!");
-            setContent("");
-            setEmotion("");
-            setLastSubmitTime(Date.now());
-          }
-          setLoading(false);
+          await postVent({ latitude, longitude });
         },
         async (error) => {
           console.error("Geolocation error:", error);
-          const { error: postError } = await (supabase as any)
-            .from("vents")
-            .insert([{ content, emotion, user_id: user.id }]);
-
-          if (postError) {
-            toast.error(postError.message);
-          } else {
-            toast.success("Vent released (without location)!");
-            setContent("");
-            setEmotion("");
-            setLastSubmitTime(Date.now());
-          }
-          setLoading(false);
-        }
+          await postVent(); // Fallback to locationless signal
+        },
+        { timeout: 10000 }
       );
     } else {
-      toast.error("Geolocation is not supported by this browser.");
-      setLoading(false);
+      await postVent();
     }
   };
 
@@ -177,21 +137,25 @@ const VentForm = () => {
           <div className="space-y-2">
             <p className="text-[8px] font-bold uppercase tracking-widest text-neutral-600 ml-1">How does this feel?</p>
             <div className="flex flex-wrap gap-1">
-              {FEELINGS.map((f) => (
-                <button
-                  key={f}
-                  type="button"
-                  onClick={() => setEmotion(f)}
-                  className={twMerge(
-                    "px-2.5 py-1 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all duration-300 border border-white/5 focus-visible:outline-none",
-                    emotion === f 
-                      ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/20 border-emerald-400" 
-                      : "bg-neutral-800/40 text-neutral-500 hover:bg-neutral-800 hover:text-white"
-                  )}
-                >
-                  {f}
-                </button>
-              ))}
+              {FEELINGS.map((f) => {
+                const colors = getEmotionColor(f);
+                const isSelected = emotion === f;
+                return (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setEmotion(f)}
+                    className={twMerge(
+                      "px-2.5 py-1 rounded-lg text-[8px] font-bold uppercase tracking-widest transition-all duration-300 border border-white/5 focus-visible:outline-none",
+                      isSelected 
+                        ? `${colors.bg} text-white shadow-lg ${colors.shadow} ${colors.border}` 
+                        : "bg-neutral-800/40 text-neutral-500 hover:bg-neutral-800 hover:text-white"
+                    )}
+                  >
+                    {f}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -203,14 +167,17 @@ const VentForm = () => {
               className="
                 bg-gradient-to-r from-emerald-500 to-teal-500 
                 hover:from-emerald-400 hover:to-teal-400
-                text-white px-6 py-2 rounded-lg font-black uppercase tracking-widest text-[9px]
+                text-white px-10 py-3 rounded-xl font-black uppercase tracking-widest text-[10px]
                 transition-all duration-500 shadow-xl shadow-emerald-500/20
                 disabled:opacity-50 disabled:cursor-not-allowed
                 hover:scale-105 active:scale-95
                 focus-visible:outline-none
               "
             >
-              {loading ? "Releasing..." : "Release Bubble"}
+              <div className="flex items-center gap-x-2">
+                  <RiBubbleChartFill size={16} />
+                  {loading ? "Synchronizing..." : "Release Bubble"}
+              </div>
             </button>
           </div>
         </form>

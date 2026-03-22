@@ -6,6 +6,7 @@ import { useSupabase } from "@/providers/SupabaseProvider";
 import Header from "@/components/Header";
 import { motion, AnimatePresence } from "framer-motion";
 import { HiPaperAirplane, HiOutlineUserCircle } from "react-icons/hi2";
+import { twMerge } from "tailwind-merge";
 
 interface Message {
   id: string;
@@ -36,8 +37,7 @@ const GlobalChatPage = () => {
     if (offset === 0) setLoading(true);
     else setLoadingMore(true);
 
-    const { data, error } = await supabase
-      .from("messages")
+    const { data, error } = await (supabase.from("messages") as any)
       .select("*, profiles (username, avatar_url)")
       .is("group_id", null)
       .order("created_at", { ascending: false })
@@ -68,8 +68,7 @@ const GlobalChatPage = () => {
         async (payload) => {
           if (payload.new.group_id !== null) return;
           
-          const { data: profile } = await supabase
-            .from("profiles")
+          const { data: profile } = await (supabase.from("profiles") as any)
             .select("username, avatar_url")
             .eq("id", payload.new.user_id)
             .single();
@@ -108,10 +107,56 @@ const GlobalChatPage = () => {
     e.preventDefault();
     if (!user || !newMessage.trim()) return;
 
-    const { error } = await supabase
-      .from("messages")
+    const { error } = await (supabase.from("messages") as any)
       .insert([{ content: newMessage, user_id: user.id }]);
     if (!error) setNewMessage("");
+  };
+
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+
+  const fetchFollowing = async () => {
+    if (!user) return;
+    const { data } = await (supabase
+      .from('follows') as any)
+      .select('following_id')
+      .eq('follower_id', user.id);
+    
+    if (data) {
+      setFollowingIds(new Set((data as any[]).map(f => f.following_id)));
+    }
+  };
+
+  useEffect(() => {
+    fetchFollowing();
+  }, [user, supabase]);
+
+  const toggleFollow = async (targetUserId: string) => {
+    if (!user) return;
+    const isFollowing = followingIds.has(targetUserId);
+
+    if (isFollowing) {
+      const { error } = await (supabase
+        .from('follows') as any)
+        .delete()
+        .eq('follower_id', user.id)
+        .eq('following_id', targetUserId);
+      
+      if (!error) {
+        setFollowingIds(prev => {
+          const next = new Set(prev);
+          next.delete(targetUserId);
+          return next;
+        });
+      }
+    } else {
+      const { error } = await (supabase
+        .from('follows') as any)
+        .insert([{ follower_id: user.id, following_id: targetUserId }]);
+      
+      if (!error) {
+        setFollowingIds(prev => new Set(prev).add(targetUserId));
+      }
+    }
   };
 
   return (
@@ -175,9 +220,24 @@ const GlobalChatPage = () => {
                       }`}
                     >
                       {!isOwn && (
-                        <span className="text-[9px] font-black uppercase tracking-widest mb-1 block text-emerald-500">
-                          @{anonymousName}
-                        </span>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">
+                            @{anonymousName}
+                          </span>
+                          {user && user.id !== message.user_id && (
+                            <button
+                              onClick={() => toggleFollow(message.user_id)}
+                              className={twMerge(
+                                "text-[7px] font-black uppercase tracking-[0.2em] px-2 py-0.5 rounded-full border transition-all",
+                                followingIds.has(message.user_id)
+                                  ? "text-neutral-500 border-white/5 bg-white/5 hover:border-red-500/20 hover:text-red-500"
+                                  : "text-emerald-500 border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500 hover:text-black"
+                              )}
+                            >
+                              {followingIds.has(message.user_id) ? 'Linked' : 'Link Signal'}
+                            </button>
+                          )}
+                        </div>
                       )}
                       <p className="text-sm leading-relaxed">
                         {message.content}

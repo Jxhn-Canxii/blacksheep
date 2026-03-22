@@ -5,7 +5,7 @@ import { Metadata } from "next";
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const supabase = await createClient();
-  const { data: group } = await supabase.from('groups').select('name').eq('id', id).single();
+  const { data: group } = await (supabase.from('groups') as any).select('name').eq('id', id).single();
 
   return {
     title: group?.name || "Group Circle",

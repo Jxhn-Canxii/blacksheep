@@ -8,6 +8,7 @@ import ToasterProvider from "@/providers/ToasterProvider";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
 import PageTransition from "@/components/PageTransition";
+import NavigationLoader from "@/components/NavigationLoader";
 import { createClient } from "@/libs/supabaseServer";
 import { getCachedTrendingFeelings } from "@/libs/cachedQueries";
 
@@ -38,7 +39,6 @@ export const viewport: Viewport = {
 };
 
 
-export const dynamic = 'force-dynamic';
 
 export default async function RootLayout({
   children,
@@ -71,6 +71,7 @@ export default async function RootLayout({
   return (
     <html lang="en">
       <body className="font-sans antialiased bg-black text-white">
+        <NavigationLoader />
         <ToasterProvider />
         <SupabaseProvider>
           <UserProvider>

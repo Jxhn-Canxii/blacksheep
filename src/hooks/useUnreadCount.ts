@@ -27,15 +27,28 @@ export const useUnreadCount = () => {
 
     fetchUnreadCount();
 
-    // Subscribe to changes in direct_messages
+    // Subscribe only to relevant changes (new messages for this user, or read status updates)
     const channel = supabase
-      .channel('unread-dm-count')
+      .channel(`unread-dm-count-${user.id}`)
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT',
           schema: 'public',
           table: 'direct_messages',
+          filter: `receiver_id=eq.${user.id}`,
+        },
+        () => {
+          fetchUnreadCount();
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'direct_messages',
+          filter: `receiver_id=eq.${user.id}`,
         },
         () => {
           fetchUnreadCount();

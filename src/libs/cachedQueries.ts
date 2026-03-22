@@ -34,20 +34,61 @@ export const getCachedTrendingFeelings = unstable_cache(
 );
 
 /**
- * Cached fetch for group metadata
+ * Cached fetch for global vents (Paginated)
+ * Revalidates every 30 seconds for relative freshness
  */
-export const getCachedGroupDetails = (groupId: string) => unstable_cache(
+export const getCachedVents = (pageNum = 0, itemsPerPage = 5) => unstable_cache(
+  async () => {
+    const supabase = await createAdminClient();
+    const from = pageNum * itemsPerPage;
+    const to = from + itemsPerPage - 1;
+
+    const { data, error } = await supabase
+      .from('vents')
+      .select(`
+        *,
+        profiles (
+          username,
+          follower_count:follows!following_id(count)
+        ),
+        vent_reactions (id, user_id, type),
+        pulse_shares (id, user_id)
+      `)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+
+    if (error) return [];
+    return data;
+  },
+  [`vents-page-${pageNum}`],
+  { revalidate: 30, tags: ['vents'] }
+)();
+
+/**
+ * Cached fetch for all neural clusters (Groups)
+ */
+export const getCachedGroups = unstable_cache(
   async () => {
     const supabase = await createAdminClient();
     const { data, error } = await supabase
       .from('groups')
-      .select('*')
-      .eq('id', groupId)
-      .single();
+      .select(`
+        *,
+        group_members (
+          user_id,
+          status,
+          profiles (
+            username,
+            avatar_url
+          )
+        )
+      `)
+      .order('created_at', { ascending: false });
 
-    if (error) return null;
+    if (error) return [];
     return data;
   },
-  [`group-${groupId}`],
-  { revalidate: 3600, tags: [`group-${groupId}`] }
-)();
+  ['all-groups'],
+  { revalidate: 300, tags: ['groups'] }
+);
+

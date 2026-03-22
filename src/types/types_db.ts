@@ -129,16 +129,108 @@ export interface Database {
           id: string;
           group_id: string;
           user_id: string;
+          status: string | null;
+          role: string | null;
         };
         Insert: {
           id?: string;
           group_id: string;
           user_id: string;
+          status?: string | null;
+          role?: string | null;
         };
         Update: {
           id?: string;
           group_id?: string;
           user_id?: string;
+          status?: string | null;
+          role?: string | null;
+        };
+      };
+      follows: {
+        Row: {
+          id: string;
+          created_at: string;
+          follower_id: string;
+          following_id: string;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          follower_id: string;
+          following_id: string;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          follower_id?: string;
+          following_id?: string;
+        };
+      };
+      direct_messages: {
+        Row: {
+          id: string;
+          created_at: string;
+          content: string;
+          sender_id: string;
+          receiver_id: string;
+          is_read: boolean;
+        };
+        Insert: {
+          id?: string;
+          created_at?: string;
+          content: string;
+          sender_id: string;
+          receiver_id: string;
+          is_read?: boolean;
+        };
+        Update: {
+          id?: string;
+          created_at?: string;
+          content?: string;
+          sender_id?: string;
+          receiver_id?: string;
+          is_read?: boolean;
+        };
+      };
+      vent_reactions: {
+        Row: {
+          id: string;
+          vent_id: string;
+          user_id: string;
+          type: string;
+        };
+        Insert: {
+          id?: string;
+          vent_id: string;
+          user_id: string;
+          type: string;
+        };
+        Update: {
+          id?: string;
+          vent_id?: string;
+          user_id?: string;
+          type?: string;
+        };
+      };
+      reply_reactions: {
+        Row: {
+          id: string;
+          reply_id: string;
+          user_id: string;
+          type: string;
+        };
+        Insert: {
+          id?: string;
+          reply_id: string;
+          user_id: string;
+          type: string;
+        };
+        Update: {
+          id?: string;
+          reply_id?: string;
+          user_id?: string;
+          type?: string;
         };
       };
     };

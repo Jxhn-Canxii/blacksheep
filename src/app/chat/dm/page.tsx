@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, Suspense, memo } from "react";
+import { useEffect, useState, useRef, Suspense, memo, useMemo, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useUser } from "@/providers/UserProvider";
 import { useSupabase } from "@/providers/SupabaseProvider";
@@ -22,7 +22,7 @@ interface Message {
   } | null;
 }
 
-const MessageItem = memo(({ message, isOwn, displayName }: { message: Message, isOwn: boolean, displayName: string }) => (
+const MessageItem = memo(({ message, isOwn, displayName, isFollowing, onToggleFollow }: { message: Message, isOwn: boolean, displayName: string, isFollowing: boolean, onToggleFollow: (id: string) => void }) => (
   <motion.div
     initial={{ scale: 0.95, opacity: 0, y: 5 }}
     animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -47,9 +47,26 @@ const MessageItem = memo(({ message, isOwn, displayName }: { message: Message, i
         }`}
       >
         {!isOwn && (
-          <span className="text-[9px] font-black uppercase tracking-widest mb-1 block text-emerald-500">
-            @{displayName}
-          </span>
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">
+              @{displayName}
+            </span>
+            {onToggleFollow && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleFollow(message.sender_id);
+                }}
+                className={`text-[7px] font-black uppercase tracking-[0.15em] px-1.5 py-0.5 rounded border transition-all ${
+                  isFollowing 
+                    ? "text-neutral-500 border-white/5 bg-white/5" 
+                    : "text-emerald-500 border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500 hover:text-black"
+                }`}
+              >
+                {isFollowing ? 'Linked' : 'Link Signal'}
+              </button>
+            )}
+          </div>
         )}
         <p className="text-sm leading-relaxed">
           {message.content}
@@ -57,8 +74,8 @@ const MessageItem = memo(({ message, isOwn, displayName }: { message: Message, i
       </div>
     </div>
     
-    <p className="text-[8px] text-neutral-600 mt-1 font-bold tracking-tight uppercase px-1">
-      {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+    <p className="text-[8px] text-neutral-600 mt-1 font-bold tracking-tight uppercase px-1 flex items-center justify-between w-full">
+      <span>{new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
     </p>
   </motion.div>
 ));
@@ -75,6 +92,19 @@ const DirectMessageContent = () => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [targetProfile, setTargetProfile] = useState<any>(null);
+  const [isFollowingTarget, setIsFollowingTarget] = useState(false);
+
+  const toggleFollow = async (tid: string) => {
+    if (!user) return;
+    const { data: existing } = await (supabase.from('follows') as any).select('id').eq('follower_id', user.id).eq('following_id', tid).single();
+    if (existing) {
+      await (supabase.from('follows') as any).delete().eq('follower_id', user.id).eq('following_id', tid);
+      if (tid === targetUserId) setIsFollowingTarget(false);
+    } else {
+      await (supabase.from('follows') as any).insert([{ follower_id: user.id, following_id: tid }]);
+      if (tid === targetUserId) setIsFollowingTarget(true);
+    }
+  };
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -82,6 +112,16 @@ const DirectMessageContent = () => {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [requests, setRequests] = useState<Friend[]>([]);
   const [activeTab, setActiveTab] = useState<"neural" | "requests">("neural");
+
+  // Tab State Persistence (Task 12)
+  useEffect(() => {
+    const savedTab = localStorage.getItem('dm_active_tab');
+    if (savedTab === "neural" || savedTab === "requests") setActiveTab(savedTab);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('dm_active_tab', activeTab);
+  }, [activeTab]);
   const [searchFriend, setSearchFriend] = useState("");
   const [loadingFriends, setLoadingFriends] = useState(true);
   const [isNewFriend, setIsNewFriend] = useState(false);
@@ -106,21 +146,20 @@ const DirectMessageContent = () => {
       if (!user) return;
       setLoadingFriends(true);
 
-      // Fetch users I follow
-      const { data: following } = await supabase
-        .from('follows')
+      const { data: following } = (await (supabase
+        .from('follows') as any)
         .select('following_id, created_at, profiles:following_id(username, avatar_url)')
-        .eq('follower_id', user.id);
+        .eq('follower_id', user.id)) as { data: any[] | null };
 
       // Fetch users who follow me
-      const { data: followers } = await supabase
-        .from('follows')
+      const { data: followers } = (await (supabase
+        .from('follows') as any)
         .select('follower_id, created_at, profiles:follower_id(username, avatar_url)')
-        .eq('following_id', user.id);
+        .eq('following_id', user.id)) as { data: any[] | null };
 
       if (following && followers) {
-        const followingIds = new Set(following.map(f => f.following_id));
-        const followerIds = new Set(followers.map(f => f.follower_id));
+        const followingIds = new Set((following as any[]).map(f => f.following_id));
+        const followerIds = new Set((followers as any[]).map(f => f.follower_id));
 
         // Fetch unread counts and conversation status for all followers/following
         const allRelevantUserIds = Array.from(new Set([
@@ -128,10 +167,10 @@ const DirectMessageContent = () => {
           ...followers.map(f => f.follower_id)
         ]));
         
-        const { data: messageData } = await supabase
+        const { data: messageData } = (await supabase
           .from('direct_messages')
           .select('sender_id, receiver_id, is_read')
-          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`);
+          .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)) as { data: any[] | null };
 
         // Find users who sent messages but aren't in follows/following
         const messageUserIds = new Set((messageData || []).flatMap(m => [m.sender_id, m.receiver_id]));
@@ -212,19 +251,23 @@ const DirectMessageContent = () => {
 
     fetchFollowData();
 
-    // Realtime listener for message counts/status
+    // Realtime listener — only listen for INSERT to avoid refetching on every read-status update
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const channel = supabase
       .channel('dm-inbox-updates')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'direct_messages' },
+        { event: 'INSERT', schema: 'public', table: 'direct_messages' },
         () => {
-          fetchFollowData();
+          // Debounce to avoid rapid-fire refetches
+          if (debounceTimer) clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => fetchFollowData(), 500);
         }
       )
       .subscribe();
 
     return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
       supabase.removeChannel(channel);
     };
   }, [user, supabase]);
@@ -239,17 +282,12 @@ const DirectMessageContent = () => {
           .single();
         setTargetProfile(data);
 
-        // Mark messages as read
-        await supabase
-          .from('direct_messages')
-          .update({ is_read: true })
-          .eq('sender_id', targetUserId)
-          .eq('receiver_id', user.id)
-          .eq('is_read', false);
+        // Check following status
+        const { data: followStatus } = await (supabase.from('follows') as any).select('id').eq('follower_id', user.id).eq('following_id', targetUserId).single();
+        setIsFollowingTarget(!!followStatus);
 
         // Check if new friend
-        const { data: follow } = await supabase
-          .from('follows')
+        const { data: follow } = await (supabase.from('follows') as any)
           .select('created_at')
           .eq('follower_id', user.id)
           .eq('following_id', targetUserId)
@@ -260,8 +298,7 @@ const DirectMessageContent = () => {
           const now = new Date().getTime();
           
           // Check if there are any messages in this conversation
-          const { count } = await supabase
-            .from('direct_messages')
+          const { count } = await (supabase.from('direct_messages') as any)
             .select('*', { count: 'exact', head: true })
             .or(`and(sender_id.eq.${user.id},receiver_id.eq.${targetUserId}),and(sender_id.eq.${targetUserId},receiver_id.eq.${user.id})`);
 
@@ -281,8 +318,7 @@ const DirectMessageContent = () => {
     if (offset === 0) setLoading(true);
     else setLoadingMore(true);
 
-    const { data, error } = await supabase
-      .from("direct_messages")
+    const { data, error } = await (supabase.from("direct_messages") as any)
       .select("*, profiles:sender_id (username, avatar_url)")
       .or(`and(sender_id.eq.${user.id},receiver_id.eq.${targetUserId}),and(sender_id.eq.${targetUserId},receiver_id.eq.${user.id})`)
       .order("created_at", { ascending: false })
@@ -362,23 +398,22 @@ const DirectMessageContent = () => {
     const content = contentOverride || newMessage;
     if (!user || !targetUserId || !content.trim()) return;
 
-    const { error } = await supabase
-      .from("direct_messages")
+    const { error } = await (supabase.from("direct_messages") as any)
       .insert([{ content: content, sender_id: user.id, receiver_id: targetUserId }]);
     
     if (!error && !contentOverride) setNewMessage("");
     if (!error) setIsNewFriend(false);
   };
 
-  const filteredFriends = friends.filter(f => 
+  const filteredFriends = useMemo(() => friends.filter(f => 
     f.username.toLowerCase().includes(searchFriend.toLowerCase())
-  );
+  ), [friends, searchFriend]);
 
-  const filteredRequests = requests.filter(f => 
+  const filteredRequests = useMemo(() => requests.filter(f => 
     f.username.toLowerCase().includes(searchFriend.toLowerCase())
-  );
+  ), [requests, searchFriend]);
 
-  const currentList = activeTab === "neural" ? filteredFriends : filteredRequests;
+  const currentList = useMemo(() => activeTab === "neural" ? filteredFriends : filteredRequests, [activeTab, filteredFriends, filteredRequests]);
 
   if (!targetUserId) {
     return (
@@ -499,6 +534,17 @@ const DirectMessageContent = () => {
                         </div>
                       </button>
 
+                      {activeTab === "requests" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFollow(friend.id);
+                          }}
+                          className="bg-emerald-500 text-black px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 hover:scale-105 active:scale-95 transition-all z-10"
+                        >
+                          Link Signal
+                        </button>
+                      )}
                       {isNew && activeTab === "neural" && (
                         <button
                           onClick={(e) => {
@@ -544,17 +590,26 @@ const DirectMessageContent = () => {
           </div>
           {targetProfile && (
              <div className="ml-auto hidden md:flex items-center gap-x-4">
-                <div className="flex flex-col items-end">
-                   <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Target Active</span>
-                   <span className="text-[8px] font-bold text-neutral-500 uppercase tracking-widest">@{targetProfile.username}</span>
-                </div>
-                <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden">
-                   {targetProfile.avatar_url ? (
-                      <img src={targetProfile.avatar_url} alt={targetProfile.username} className="w-full h-full object-cover" />
-                   ) : (
-                      <HiOutlineUserCircle size={24} className="text-neutral-600" />
-                   )}
-                </div>
+                 <div className="flex flex-col items-end">
+                    <span className="text-[10px] font-black text-emerald-500 uppercase tracking-widest">Target Active</span>
+                    <span className="text-[8px] font-bold text-neutral-500 uppercase tracking-widest">@{targetProfile.username}</span>
+                 </div>
+                 <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center overflow-hidden">
+                    {targetProfile.avatar_url ? (
+                       <img src={targetProfile.avatar_url} alt={targetProfile.username} className="w-full h-full object-cover" />
+                    ) : (
+                       <HiOutlineUserCircle size={24} className="text-neutral-600" />
+                    )}
+                 </div>
+                 <button
+                    onClick={() => toggleFollow(targetUserId!)}
+                    className={twMerge(
+                      "px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all",
+                      isFollowingTarget ? "bg-white/10 text-neutral-500 border border-white/5" : "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20"
+                    )}
+                 >
+                   {isFollowingTarget ? 'Linked' : 'Link Signal'}
+                 </button>
              </div>
           )}
         </div>
@@ -616,6 +671,8 @@ const DirectMessageContent = () => {
                       message={message} 
                       isOwn={isOwn} 
                       displayName={displayName} 
+                      isFollowing={isFollowingTarget}
+                      onToggleFollow={toggleFollow}
                     />
                   );
                 })}

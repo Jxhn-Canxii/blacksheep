@@ -6,6 +6,7 @@ export interface UserDetails {
     avatar_url?: string;
     username?: string;
     website?: string;
+    followers_count?: number;
   }
 
 export interface Vent {

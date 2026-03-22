@@ -66,8 +66,8 @@ export default function ProfileSettingsPage() {
     if (!user) return;
 
     setLoading(true);
-    const { error } = await supabase
-      .from("profiles")
+    const { error } = await (supabase
+      .from("profiles") as any)
       .update({
         full_name: fullName,
         avatar_url: avatarUrl,

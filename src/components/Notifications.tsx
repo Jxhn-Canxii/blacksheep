@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSupabase } from "@/providers/SupabaseProvider";
 import { useUser } from "@/providers/UserProvider";
 import { RiNotification2Line, RiNotification2Fill, RiChatFollowUpLine, RiUserFollowLine, RiAtLine, RiMailLine } from "react-icons/ri";
+import { HiHashtag } from "react-icons/hi2";
 import { twMerge } from "tailwind-merge";
 
 const formatTimeAgo = (date: Date) => {
@@ -27,6 +28,30 @@ const Notifications = () => {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
+
+  const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  const markAsRead = async (id: string) => {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', id);
+
+    if (!error) {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen && unreadCount > 0) {
+      const timer = setTimeout(() => {
+        notifications.forEach(n => {
+          if (!n.is_read) markAsRead(n.id);
+        });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen, unreadCount, notifications]);
 
   useEffect(() => {
     if (!user) return;
@@ -70,18 +95,6 @@ const Notifications = () => {
     };
   }, [supabase, user]);
 
-  const unreadCount = notifications.filter(n => !n.is_read).length;
-
-  const markAsRead = async (id: string) => {
-    const { error } = await supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('id', id);
-
-    if (!error) {
-      setNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
-    }
-  };
 
   const getIcon = (type: string) => {
     switch (type) {
@@ -89,6 +102,7 @@ const Notifications = () => {
       case 'follow': return <RiUserFollowLine size={16} className="text-blue-500" />;
       case 'mention': return <RiAtLine size={16} className="text-purple-500" />;
       case 'message': return <RiMailLine size={16} className="text-orange-500" />;
+      case 'group_info': return <HiHashtag size={16} className="text-emerald-500" />;
       default: return <RiNotification2Line size={16} />;
     }
   };
@@ -100,6 +114,7 @@ const Notifications = () => {
       case 'follow': return <span><b className="text-white">@{actorName}</b> is now following your frequency.</span>;
       case 'mention': return <span><b className="text-white">@{actorName}</b> called your signal.</span>;
       case 'message': return <span><b className="text-white">@{actorName}</b> sent you a direct message.</span>;
+      case 'group_info': return <span>Circle <b>Established</b>: <b className="text-white">{n.metadata?.name}</b>. ID: <b className="text-emerald-500 select-all cursor-pointer" title="Click to Copy">{n.metadata?.cluster_id || 'Syncing...'}</b></span>;
       default: return <span>Activity from <b className="text-white">@{actorName}</b></span>;
     }
   };
@@ -122,18 +137,26 @@ const Notifications = () => {
 
       {isOpen && (
         <>
-          <div className="fixed inset-0 z-[100]" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 mt-3 w-80 bg-neutral-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-[101] overflow-hidden">
+          <div className="fixed inset-0 z-[998]" onClick={() => setIsOpen(false)} />
+          <div className="absolute right-0 mt-3 w-80 bg-neutral-900/90 backdrop-blur-2xl border border-white/10 rounded-2xl shadow-2xl z-[999] overflow-hidden">
             <div className="p-4 border-b border-white/5 flex items-center justify-between">
               <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-neutral-500">Neural Activity</h3>
-              {unreadCount > 0 && (
+              <div className="flex items-center gap-x-3">
                 <button 
-                  onClick={() => notifications.forEach(n => !n.is_read && markAsRead(n.id))}
-                  className="text-[9px] font-bold text-emerald-500 hover:underline uppercase tracking-widest"
+                  onClick={() => window.location.href = '/notifications'}
+                  className="text-[9px] font-bold text-neutral-500 hover:text-white transition-colors uppercase tracking-widest"
                 >
-                  Clear All
+                  See All
                 </button>
-              )}
+                {unreadCount > 0 && (
+                  <button 
+                    onClick={() => notifications.forEach(n => !n.is_read && markAsRead(n.id))}
+                    className="text-[9px] font-bold text-emerald-500 hover:underline uppercase tracking-widest"
+                  >
+                    Clear All
+                  </button>
+                )}
+              </div>
             </div>
             
             <div className="max-h-[400px] overflow-y-auto scrollbar-hide">

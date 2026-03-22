@@ -30,8 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const supabase = await createClient();
   const { content, user_id } = await request.json();
 
-  const { data, error } = await supabase
-    .from('messages')
+  const { data, error } = await (supabase.from('messages') as any)
     .insert([{ content, user_id, group_id: id }])
     .select()
     .single();

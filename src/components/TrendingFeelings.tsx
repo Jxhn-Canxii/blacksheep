@@ -56,15 +56,18 @@ const TrendingFeelings = ({ initialData = [] }: { initialData?: TrendingEmotion[
             fetchTrending();
         }
 
-        // Subscribe to vents to refresh trending live
+        // Subscribe to vents to refresh trending live — debounced to avoid excessive queries
+        let debounceTimer: ReturnType<typeof setTimeout> | null = null;
         const channel = supabase
             .channel('trending-refresh')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vents' }, () => {
-                fetchTrending();
+                if (debounceTimer) clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => fetchTrending(), 5000);
             })
             .subscribe();
 
         return () => {
+            if (debounceTimer) clearTimeout(debounceTimer);
             supabase.removeChannel(channel);
         };
     }, [supabase, initialData]);

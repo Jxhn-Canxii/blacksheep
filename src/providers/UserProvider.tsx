@@ -29,10 +29,20 @@ export default function UserProvider({ children }: { children: React.ReactNode }
     if (!user) return;
     const { data: userDetails } = await supabase
       .from('profiles')
-      .select('*')
+      .select(`
+        *,
+        followers:follows!following_id(count)
+      `)
       .eq('id', user.id)
       .single();
-    setUserDetails(userDetails as UserDetails | null);
+    
+    if (userDetails) {
+      const formattedDetails: UserDetails = {
+        ...(userDetails as any),
+        followers_count: (userDetails as any).followers?.[0]?.count || 0
+      };
+      setUserDetails(formattedDetails);
+    }
   }, [user, supabase]);
 
   useEffect(() => {
@@ -48,6 +58,52 @@ export default function UserProvider({ children }: { children: React.ReactNode }
       setIsLoggingIn(false);
     }
   }, [user, refreshProfile]);
+
+  // Background Location & Presence Service
+  useEffect(() => {
+    if (!user) return;
+
+    const updatePresence = () => {
+      // Avoid re-rendering or background work when away from browser (Task 14 in TODO)
+      if (document.visibilityState === 'hidden') return;
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (position) => {
+          const { latitude, longitude } = position.coords;
+          await (supabase.from('profiles') as any)
+            .update({ 
+              last_location: { latitude, longitude },
+              last_seen: new Date().toISOString()
+            })
+            .eq('id', user.id);
+        }, (err) => {
+          console.warn("Location synchronization paused: Geolocation unavailable or denied.");
+        }, {
+          enableHighAccuracy: false, // Optimized first mentality
+          timeout: 10000,
+          maximumAge: 60000
+        });
+      }
+    };
+
+    // Initial sycn
+    updatePresence();
+    
+    // Timely update every 5 minutes (Task 8 in TODO)
+    const interval = setInterval(updatePresence, 300000); 
+    
+    // Tab visibility change listener to avoid irrelevant background work
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') updatePresence();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [user, supabase]);
 
   const value = useMemo(() => ({
     user,

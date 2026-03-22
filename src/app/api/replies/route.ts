@@ -5,8 +5,7 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { content, user_id, vent_id } = await request.json();
 
-  const { data, error } = await supabase
-    .from('replies')
+  const { data, error } = await (supabase.from('replies') as any)
     .insert([{ content, user_id, vent_id }])
     .select()
     .single();

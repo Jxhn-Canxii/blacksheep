@@ -161,8 +161,18 @@ alter table group_members
 create policy "Group members are viewable by everyone." on group_members
   for select using (true);
 
-create policy "Users can insert themselves into a group." on group_members
-  for insert with check (auth.uid() = user_id);
+create policy "Users can join a group or admins can add them." on group_members
+  for insert with check (
+    auth.uid() = user_id
+    or
+    exists (
+      select 1 from group_members as gm
+      where gm.group_id = group_members.group_id
+      and gm.user_id = auth.uid()
+      and gm.role in ('admin', 'moderator')
+      and gm.status = 'approved'
+    )
+  );
 
 create policy "Users can remove themselves from a group." on group_members
   for delete using (auth.uid() = user_id);

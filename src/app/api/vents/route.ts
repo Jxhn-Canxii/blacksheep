@@ -1,19 +1,13 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/libs/supabaseServer';
+import { getCachedVents } from '@/libs/cachedQueries';
 
-export async function GET() {
-  const supabase = await createClient();
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const page = parseInt(searchParams.get('page') || '0');
+  const limit = parseInt(searchParams.get('limit') || '5');
 
-  const { data, error } = await supabase
-    .from('vents')
-    .select('*, profiles (username)')
-    .order('created_at', { ascending: false });
-
-  if (error) {
-    console.error('Error fetching vents:', error);
-    return new NextResponse('Error fetching vents', { status: 500 });
-  }
-
+  const data = await getCachedVents(page, limit);
   return NextResponse.json(data);
 }
 
@@ -21,8 +15,7 @@ export async function POST(request: Request) {
   const supabase = await createClient();
   const { content, emotion, user_id, location } = await request.json();
 
-  const { data, error } = await supabase
-    .from('vents')
+  const { data, error } = await (supabase.from('vents') as any)
     .insert([{ content, emotion, user_id, location }])
     .select()
     .single();

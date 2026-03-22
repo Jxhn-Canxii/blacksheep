@@ -1,14 +1,17 @@
 "use client";
 
 import { useEffect, useState, memo, useCallback, useMemo } from "react";
+import useSWR, { useSWRConfig } from "swr";
 import { useRouter } from "next/navigation";
 import { useSupabase } from "@/providers/SupabaseProvider";
 import { useUser } from "@/providers/UserProvider";
 import ReplyForm from "./ReplyForm";
 import { motion, AnimatePresence } from "framer-motion";
-import { RiBubbleChartLine, RiChatFollowUpFill, RiHeart2Line, RiHeart2Fill, RiUserFollowLine, RiGlobalLine, RiHandHeartLine } from "react-icons/ri";
-import { HiChatBubbleOvalLeftEllipsis, HiSparkles, HiArrowTrendingUp, HiOutlineFaceSmile, HiOutlineChatBubbleLeftRight } from "react-icons/hi2";
+import { RiBubbleChartLine, RiChatFollowUpFill, RiHeart2Line, RiHeart2Fill, RiUserFollowLine, RiGlobalLine, RiHandHeartLine, RiShareForwardLine } from "react-icons/ri";
+import { HiChatBubbleOvalLeftEllipsis, HiSparkles, HiArrowTrendingUp, HiOutlineFaceSmile, HiOutlineChatBubbleLeftRight, HiShare } from "react-icons/hi2";
 import { twMerge } from "tailwind-merge";
+import { supabaseFetcher } from "@/libs/fetcher";
+import { getEmotionColor } from "@/libs/emotionColors";
 
 const REACTION_TYPES = [
   { type: 'like', emoji: '👍', label: 'Resonate' },
@@ -18,6 +21,17 @@ const REACTION_TYPES = [
   { type: 'sad', emoji: '😢', label: 'Sad' },
   { type: 'angry', emoji: '🔥', label: 'Burn' },
 ];
+
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 const ReplyItem = ({ 
   reply, 
@@ -193,9 +207,12 @@ const VentCard = memo(({
   isFollower,
   toggleFollow,
   view,
-  supabase
+  supabase,
+  userLocation,
+  handleShare
 }: any) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
   const [replies, setReplies] = useState<any[]>([]);
   const [loadingReplies, setLoadingReplies] = useState(false);
 
@@ -214,6 +231,7 @@ const VentCard = memo(({
   }, {});
   const totalReactions = vent.vent_reactions?.length || 0;
   const isFriend = isFollowing && isFollower;
+  const colors = getEmotionColor(vent.emotion);
 
   const fetchReplies = async () => {
     if (loadingReplies) return;
@@ -334,10 +352,11 @@ const VentCard = memo(({
     >
       {/* Desktop Card */}
       <div className={twMerge(
-          "hidden md:flex flex-col rounded-[1.5rem] transition-all duration-500 overflow-hidden relative border",
-          isActive || isExpanded
-            ? "bg-black border-emerald-500/30 shadow-[0_0_80px_rgba(16,185,129,0.1)] ring-1 ring-emerald-500/20" 
-            : "bg-neutral-900/40 border-white/5 hover:border-emerald-500/10 shadow-xl hover:bg-neutral-900/60"
+          "hidden md:flex flex-col rounded-[1.5rem] transition-all duration-500 relative border",
+            isActive || isExpanded
+            ? `bg-black border-emerald-500/30 shadow-[0_0_80px_rgba(16,185,129,0.1)] ring-1 ring-emerald-500/20` 
+            : `bg-neutral-900/40 border-white/5 hover:border-emerald-500/10 shadow-xl hover:bg-neutral-900/60`,
+            vent.emotion && !isActive && !isExpanded && `border-l-4 ${colors.border}`
       )}>
           <div className="flex flex-col p-5 gap-y-3 relative z-10">
               <div className="flex items-center justify-between">
@@ -349,18 +368,37 @@ const VentCard = memo(({
                         <span className="text-white text-sm font-black italic uppercase tracking-tighter">
                           {displayName}
                         </span>
-                        {isFollower && !isFollowing && (
-                          <span className="text-[8px] font-bold text-emerald-500/50 uppercase tracking-widest">Follows you</span>
-                        )}
-                        {isFriend && (
-                          <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-x-1">
-                            <HiSparkles size={8} /> Neural Friends
+                        <div className="flex items-center gap-x-2">
+                          {isFollower && !isFollowing && (
+                            <span className="text-[8px] font-bold text-emerald-500/50 uppercase tracking-widest">Follows you</span>
+                          )}
+                          {isFriend && (
+                            <span className="text-[8px] font-bold text-emerald-500 uppercase tracking-widest flex items-center gap-x-1">
+                              <HiSparkles size={8} /> Neural Friends
+                            </span>
+                          )}
+                          <span className="text-[8px] font-black text-emerald-500/40 uppercase tracking-widest flex items-center gap-x-1.5">
+                            {vent.profiles?.follower_count?.[0]?.count || 0} Links
+                            {vent.location && userLocation && (
+                              <span className="flex items-center gap-x-1 py-0.5 px-2 bg-emerald-500/5 border border-emerald-500/10 rounded-full text-emerald-500/80">
+                                <span className="w-0.5 h-0.5 rounded-full bg-emerald-500/30" />
+                                {calculateDistance(userLocation.latitude, userLocation.longitude, vent.location.latitude, vent.location.longitude).toFixed(1)}km
+                              </span>
+                            )}
                           </span>
-                        )}
+                        </div>
                      </div>
                   </div>
                   
                   <div className="flex items-center gap-x-2">
+                    {vent.emotion && (
+                      <span className={twMerge(
+                        "px-2.5 py-1 text-[7px] font-black uppercase tracking-widest rounded-lg border",
+                        colors.bg, colors.text, colors.border
+                      )}>
+                        {vent.emotion}
+                      </span>
+                    )}
                     {user && user.id !== vent.user_id && (
                       <button
                         onClick={(e) => {
@@ -374,7 +412,7 @@ const VentCard = memo(({
                             : "bg-emerald-500 text-black border-emerald-400 shadow-lg shadow-emerald-500/20 hover:scale-105"
                         )}
                       >
-                        {isFollowing ? 'Disconnect' : 'Connect'}
+                        {isFollowing ? 'Linked' : 'Link Signal'}
                       </button>
                     )}
                     <div className="text-neutral-700 px-3 py-1 rounded-full border border-white/5 text-[7px] font-mono uppercase">
@@ -386,6 +424,36 @@ const VentCard = memo(({
               <div className="text-left text-neutral-200 font-medium leading-[1.4] text-[15px]">
                 {vent.content}
               </div>
+
+              {/* Multisensory Signal Rendering */}
+              {vent.media_url && vent.media_type === 'video' && (
+                <div className="mt-4 rounded-[1.8rem] overflow-hidden border border-white/10 shadow-2xl bg-black relative group/video">
+                  <video 
+                    src={vent.media_url} 
+                    controls 
+                    className="w-full aspect-video object-cover" 
+                    poster={vent.metadata?.thumbnail} 
+                  />
+                  <div className="absolute top-4 right-4 bg-black/40 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 opacity-0 group-hover/video:opacity-100 transition-opacity">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-emerald-500">Visual Resonance</span>
+                  </div>
+                </div>
+              )}
+
+              {vent.media_url && vent.media_type === 'audio' && (
+                <div className="mt-4 p-5 rounded-[1.8rem] bg-gradient-to-r from-emerald-500/5 to-transparent border border-white/5 flex items-center gap-x-4 shadow-inner">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center animate-pulse">
+                    <RiPulseLine className="text-emerald-500" size={20} />
+                  </div>
+                  <div className="flex-1">
+                    <audio 
+                        src={vent.media_url} 
+                        controls 
+                        className="w-full h-8 brightness-90 contrast-125 saturate-150 grayscale invert-[0.9] hue-rotate-[145deg]" 
+                    />
+                  </div>
+                </div>
+              )}
 
               <div className="flex items-center justify-between pt-4 border-t border-white/5">
                    <div className="flex items-center gap-x-3">
@@ -468,6 +536,52 @@ const VentCard = memo(({
                         )}
 
                         <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsSharing(!isSharing);
+                            handleShare(e, vent);
+                          }}
+                          className={twMerge(
+                            "flex items-center justify-center w-9 h-9 rounded-lg transition-all border active:scale-90",
+                            isSharing ? "bg-emerald-500 text-black border-emerald-400 shadow-lg shadow-emerald-500/20" : "bg-neutral-800 text-neutral-400 border-white/5 hover:bg-emerald-500 hover:text-black"
+                          )}
+                          title="Share Signal & QR"
+                        >
+                          <RiShareForwardLine size={18} />
+                        </button>
+
+                        <AnimatePresence>
+                          {isSharing && (
+                            <motion.div
+                              initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                              animate={{ opacity: 1, scale: 1, y: 0 }}
+                              exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                              className="absolute bottom-full right-0 mb-4 p-4 bg-neutral-900 border border-white/10 rounded-3xl shadow-[0_0_50px_rgba(16,185,129,0.2)] z-50 w-48"
+                            >
+                                <div className="space-y-3">
+                                    <div className="p-2 bg-white rounded-2xl">
+                                        <img 
+                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent((typeof window !== 'undefined' ? window.location.origin : '') + '/feeds?vent=' + vent.id)}`}
+                                            alt="Signal QR"
+                                            className="w-full h-auto aspect-square rounded-lg"
+                                        />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[8px] font-black uppercase tracking-[0.2em] text-emerald-500 mb-1">Grid Signature</p>
+                                        <p className="text-[10px] text-neutral-500 font-bold truncate">/feeds?vent={vent.id.slice(0,8)}</p>
+                                    </div>
+                                    <button
+                                        onClick={() => setIsSharing(false)}
+                                        className="w-full py-2 bg-white/5 hover:bg-white/10 text-neutral-500 hover:text-white rounded-xl text-[8px] font-black uppercase tracking-widest transition-all"
+                                    >
+                                        Seal Portal
+                                    </button>
+                                </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+
+                        <button
                           onMouseEnter={() => setReactionPickerId(vent.id)}
                           onClick={() => toggleReaction(vent.id, 'like', userReaction)}
                           className={twMerge(
@@ -530,15 +644,38 @@ const VentCard = memo(({
       {/* Mobile Card */}
       <div className={twMerge(
         "md:hidden flex flex-col p-5 bg-neutral-900/60 rounded-2xl border border-white/5 gap-y-3 relative transition-all duration-300",
-        isExpanded ? "ring-1 ring-emerald-500/30" : ""
+        isExpanded ? "ring-1 ring-emerald-500/30 shadow-2xl" : ""
       )}>
           <div className="flex items-center justify-between">
               <div className="flex flex-col">
-                <span className="text-emerald-500 text-[10px] font-black uppercase tracking-widest italic">{displayName}</span>
-                {isFriend && <span className="text-[7px] font-bold text-emerald-500 uppercase tracking-tighter">Neural Friend</span>}
+                <div className="flex items-center gap-x-2">
+                  <span className="text-emerald-500 text-[10px] font-black uppercase tracking-widest italic">{displayName}</span>
+                  {vent.emotion && (
+                    <span className={twMerge(
+                      "px-2 py-0.5 text-[6px] font-black uppercase tracking-widest rounded-md border",
+                      colors.bg, colors.text, colors.border
+                    )}>
+                      {vent.emotion}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-x-2">
+                  <span className="text-[7px] font-black text-emerald-500/40 uppercase tracking-widest">
+                    {vent.profiles?.follower_count?.[0]?.count || 0} Links
+                  </span>
+                  {vent.location && userLocation && (
+                    <span className="flex items-center gap-x-1 py-0.5 px-2 bg-emerald-500/5 border border-emerald-500/10 rounded-full text-[6px] font-black text-emerald-500/80 uppercase tracking-widest">
+                      <span className="w-0.5 h-0.5 rounded-full bg-emerald-500/30" />
+                      {calculateDistance(userLocation.latitude, userLocation.longitude, vent.location.latitude, vent.location.longitude).toFixed(0)}km
+                    </span>
+                  )}
+                </div>
               </div>
-              <span className="text-[8px] text-neutral-700 font-mono uppercase">{new Date(vent.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <span className="text-[8px] text-neutral-700 font-mono uppercase">
+                {new Date(vent.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
           </div>
+
           <p className="text-neutral-200 text-sm leading-relaxed">{vent.content}</p>
           
           <div className="flex items-center justify-between pt-2 border-t border-white/5">
@@ -561,10 +698,10 @@ const VentCard = memo(({
                     }}
                     className={twMerge(
                       "text-[8px] font-black uppercase tracking-widest px-2 py-1 rounded-md border transition-all",
-                      isFollowing ? "text-neutral-500 border-white/5" : "text-emerald-500 border-emerald-500/30 bg-emerald-500/5"
+                      isFollowing ? "text-neutral-500 border-white/5 bg-white/5" : "text-emerald-500 border-emerald-500/30 bg-emerald-500/5"
                     )}
                   >
-                    {isFollowing ? 'Unlink' : 'Link'}
+                    {isFollowing ? 'Linked' : 'Link'}
                   </button>
                 )}
               </div>
@@ -594,6 +731,50 @@ const VentCard = memo(({
                       <HiOutlineChatBubbleLeftRight size={14} />
                     </button>
                   )}
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setIsSharing(!isSharing);
+                      handleShare(e, vent);
+                    }}
+                    className={twMerge(
+                      "p-1.5 rounded-lg border transition-all active:scale-90",
+                      isSharing ? "bg-emerald-500 text-black border-emerald-400" : "bg-white/5 border-white/5 text-neutral-500"
+                    )}
+                  >
+                    <RiShareForwardLine size={14} />
+                  </button>
+
+                  <AnimatePresence>
+                    {isSharing && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: 10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: 10 }}
+                        className="absolute bottom-full right-0 mb-2 p-3 bg-neutral-900 border border-white/10 rounded-2xl shadow-2xl z-50 w-40"
+                      >
+                          <div className="space-y-2">
+                              <div className="p-1.5 bg-white rounded-xl">
+                                  <img 
+                                      src={`https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent((typeof window !== 'undefined' ? window.location.origin : '') + '/feeds?vent=' + vent.id)}`}
+                                      alt="Signal QR"
+                                      className="w-full h-auto aspect-square rounded-lg"
+                                  />
+                              </div>
+                              <div className="text-center">
+                                  <p className="text-[10px] text-neutral-500 font-bold truncate">/feeds?vent={vent.id.slice(0,8)}</p>
+                              </div>
+                              <button
+                                  onClick={() => setIsSharing(false)}
+                                  className="w-full py-1.5 bg-white/5 hover:bg-white/10 text-neutral-500 hover:text-white rounded-lg text-[8px] font-black uppercase tracking-widest transition-all"
+                              >
+                                  Close
+                              </button>
+                          </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                   
                   <div className="relative">
                     <AnimatePresence>
@@ -628,7 +809,7 @@ const VentCard = memo(({
                       onClick={() => toggleReaction(vent.id, 'like', userReaction)} 
                       className={twMerge(
                           "flex items-center gap-x-1.5 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all",
-                          userReaction ? "bg-emerald-500 text-black" : "text-neutral-600 bg-white/5"
+                          userReaction ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20" : "text-neutral-600 bg-white/5"
                       )}
                     >
                         {userReaction ? REACTION_TYPES.find(r => r.type === userReaction.type)?.emoji : <RiHandHeartLine size={12} />}
@@ -682,25 +863,113 @@ const VentCard = memo(({
  * - Orbiting Mini-Bubbles for mobile (Reply visualization).
  * - Layered social snippets with avatar initial stacks.
  */
-const VentFeed = () => {
+const VentFeed = ({ initialData }: { initialData?: any[] }) => {
   const { supabase } = useSupabase();
   const { user } = useUser();
+  const { mutate } = useSWRConfig();
   const router = useRouter();
-  const [vents, setVents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  
   const [activeVentId, setActiveVentId] = useState<string | null>(null);
   const [reactionPickerId, setReactionPickerId] = useState<string | null>(null);
-  const [followingIds, setFollowingIds] = useState<string[]>([]);
-  const [followerIds, setFollowerIds] = useState<string[]>([]);
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [followerIds, setFollowerIds] = useState<Set<string>>(new Set());
 
   const [selectedEmotion, setSelectedEmotion] = useState<string>("All");
-  const [view, setView] = useState<"All" | "Following">("All");
+  const [view, setView] = useState<"All" | "Following" | "Nearby">("All");
+  const [userLocation, setUserLocation] = useState<{ latitude: number, longitude: number } | null>(null);
 
   const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [isFetchingMore, setIsFetchingMore] = useState(false);
-
   const ITEMS_PER_PAGE = 5;
+
+  // Optimized SWR Fetching
+  const { data: vents, error, isValidating, mutate: mutateVents } = useSWR(
+    [`vents`, view, selectedEmotion, page, user?.id],
+    async () => {
+      let query = (supabase as any)
+        .from('vents')
+        .select(`
+          *,
+          profiles (
+            username,
+            follower_count:follows!following_id(count)
+          ),
+          vent_reactions (id, user_id, type),
+          pulse_shares (id, user_id)
+        `);
+
+      if (view === "Following" && user) {
+        const { data: followed } = await supabase
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.id);
+        
+        const followedIds = followed?.map(f => f.following_id) || [];
+        query = query.in('user_id', [...followedIds, user.id]);
+      }
+
+      if (selectedEmotion !== "All") {
+        query = query.eq('emotion', selectedEmotion);
+      }
+
+      const from = 0; // We load all pages up to current page for SWR consistency or handle pagination differently
+      const to = (page + 1) * ITEMS_PER_PAGE - 1;
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to);
+      
+      if (error) throw error;
+      return data;
+    },
+    {
+      fallbackData: initialData,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: true,
+      dedupingInterval: 5000,
+    }
+  );
+
+  const loading = !vents && !error;
+  const isFetchingMore = isValidating && vents && vents.length > 0;
+  const hasMore = vents ? vents.length === (page + 1) * ITEMS_PER_PAGE : true;
+
+  // Real-time subscription for new vents
+  useEffect(() => {
+    const channel = supabase
+      .channel('global-vents')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'vents' 
+      }, () => {
+        mutateVents();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'vent_reactions'
+      }, () => {
+        mutateVents();
+      })
+      .subscribe();
+    
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [supabase, mutateVents]);
+
+  // Tab State Persistence (Task 12)
+  useEffect(() => {
+    const savedView = localStorage.getItem('vent_feed_view');
+    const savedEmotion = localStorage.getItem('vent_feed_emotion');
+    if (savedView) setView(savedView as any);
+    if (savedEmotion) setSelectedEmotion(savedEmotion);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('vent_feed_view', view);
+    localStorage.setItem('vent_feed_emotion', selectedEmotion);
+  }, [view, selectedEmotion]);
 
   useEffect(() => {
     const handleClickAway = () => setReactionPickerId(null);
@@ -714,6 +983,30 @@ const VentFeed = () => {
       return;
     }
 
+    // Optimistic Update
+    const updatedVents = vents?.map((v: any) => {
+      if (v.id === ventId) {
+        const reactions = Array.isArray(v.vent_reactions) ? v.vent_reactions : [];
+        if (existingReaction && existingReaction.type === type) {
+          return {
+            ...v,
+            vent_reactions: reactions.filter((r: any) => r.user_id !== user.id)
+          };
+        } else {
+          return {
+            ...v,
+            vent_reactions: [
+              ...reactions.filter((r: any) => r.user_id !== user.id),
+              { vent_id: ventId, user_id: user.id, type, id: 'temp' }
+            ]
+          };
+        }
+      }
+      return v;
+    });
+
+    mutateVents(updatedVents, false);
+
     if (existingReaction && existingReaction.type === type) {
       const { error } = await supabase
         .from('vent_reactions')
@@ -721,11 +1014,8 @@ const VentFeed = () => {
         .eq('vent_id', ventId)
         .eq('user_id', user.id);
       
-      if (!error) {
-        setVents(prev => prev.map(v => v.id === ventId ? {
-          ...v,
-          vent_reactions: v.vent_reactions.filter((r: any) => r.user_id !== user.id)
-        } : v));
+      if (error) {
+        mutateVents(); // Rollback on error
       }
     } else {
       const { data, error } = await supabase
@@ -737,18 +1027,14 @@ const VentFeed = () => {
         .select()
         .single();
       
-      if (!error && data) {
-        setVents(prev => prev.map(v => v.id === ventId ? {
-          ...v,
-          vent_reactions: [
-            ...(Array.isArray(v.vent_reactions) ? v.vent_reactions.filter((r: any) => r.user_id !== user.id) : []),
-            data
-          ]
-        } : v));
+      if (error) {
+        mutateVents(); // Rollback on error
+      } else {
+        mutateVents(); // Final update with real data
       }
     }
     setReactionPickerId(null);
-  }, [user, supabase, router]);
+  }, [user, supabase, router, vents, mutateVents]);
 
   const toggleFollow = useCallback(async (targetId: string) => {
     if (!user) {
@@ -756,7 +1042,7 @@ const VentFeed = () => {
       return;
     }
 
-    const isCurrentlyFollowing = followingIds.includes(targetId);
+    const isCurrentlyFollowing = followingIds.has(targetId);
 
     if (isCurrentlyFollowing) {
       const { error } = await supabase
@@ -766,7 +1052,11 @@ const VentFeed = () => {
         .eq('following_id', targetId);
       
       if (!error) {
-        setFollowingIds(prev => prev.filter(id => id !== targetId));
+        setFollowingIds(prev => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
       }
     } else {
       const { error } = await supabase
@@ -774,77 +1064,99 @@ const VentFeed = () => {
         .insert([{ follower_id: user.id, following_id: targetId }]);
       
       if (!error) {
-        setFollowingIds(prev => [...prev, targetId]);
+        setFollowingIds(prev => new Set(prev).add(targetId));
       }
     }
   }, [user, followingIds, supabase, router]);
 
-  const fetchVents = useCallback(async (pageNum = 0) => {
-    if (pageNum === 0) setLoading(true);
-    else setIsFetchingMore(true);
-
-    const from = pageNum * ITEMS_PER_PAGE;
-    const to = from + ITEMS_PER_PAGE - 1;
-
-    let query = (supabase as any)
-      .from('vents')
-      .select(`
-        *,
-        profiles (username),
-        vent_reactions (id, user_id, type)
-      `);
-
-    if (view === "Following" && user) {
-      const { data: followed } = await supabase
-        .from('follows')
-        .select('following_id')
-        .eq('follower_id', user.id);
-      
-      const followedIds = followed?.map(f => f.following_id) || [];
-      query = query.in('user_id', [...followedIds, user.id]);
+  const handleShare = useCallback(async (e: React.MouseEvent, vent: any) => {
+    e.stopPropagation();
+    if (!user) {
+        toast.error("Please login to share signal.");
+        return;
     }
-
-    const { data, error } = await query
-      .order('created_at', { ascending: false })
-      .range(from, to);
     
-    if (!error && data) {
-      if (data.length < ITEMS_PER_PAGE) setHasMore(false);
-      
-      if (pageNum === 0) {
-        setVents(data);
-      } else {
-        setVents(prev => [...prev, ...data]);
-      }
+    // Copy link regardless of database sync
+    const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/feeds?vent=${vent.id}`;
+    navigator.clipboard.writeText(shareUrl);
+    
+    const { error } = await supabase
+        .from('pulse_shares')
+        .insert([{ user_id: user.id, vent_id: vent.id }]);
+
+    if (!error) {
+        toast.success("Signal synchronized to your profile!");
+        mutateVents();
+    } else if (error.code === '23505') {
+        toast.success("Signal link copied.");
+    } else {
+        toast.error("Failed to sync signal.");
     }
-    setLoading(false);
-    setIsFetchingMore(false);
-  }, [supabase, view, user]);
+  }, [user, supabase, mutateVents]);
 
-  const emotionOptions = useMemo(() => Array.from(
-    new Set(
-      vents
-        .map((v) => v.emotion)
-        .filter((e) => typeof e === "string" && e.trim().length > 0)
-    )
-  ).slice(0, 6), [vents]);
+  const emotionOptions = useMemo(() => {
+    if (!vents) return [];
+    return Array.from(
+      new Set(
+        vents
+          .map((v: any) => v.emotion)
+          .filter((e: any) => typeof e === "string" && e.trim().length > 0)
+      )
+    ).slice(0, 6);
+  }, [vents]);
 
-  const filteredVents = useMemo(() => selectedEmotion === "All"
-    ? vents
-    : vents.filter((v) => v.emotion === selectedEmotion), [selectedEmotion, vents]);
+  const sortedVents = useMemo(() => {
+    if (!vents) return [];
+    if (view !== "Nearby" || !userLocation) return vents;
+
+    return [...vents].sort((a, b) => {
+      const timeA = new Date(a.created_at).getTime();
+      const timeB = new Date(b.created_at).getTime();
+      
+      // Group by "Recent" (last 6 hours) first
+      const SIX_HOURS = 6 * 60 * 60 * 1000;
+      const isARecent = (Date.now() - timeA) < SIX_HOURS;
+      const isBRecent = (Date.now() - timeB) < SIX_HOURS;
+
+      if (isARecent && !isBRecent) return -1;
+      if (!isARecent && isBRecent) return 1;
+
+      // If both are recent OR both are old, sort by distance
+      if (a.location && b.location && userLocation) {
+        const distA = calculateDistance(userLocation.latitude, userLocation.longitude, a.location.latitude, a.location.longitude);
+        const distB = calculateDistance(userLocation.latitude, userLocation.longitude, b.location.latitude, b.location.longitude);
+        return distA - distB;
+      }
+      
+      return timeB - timeA;
+    });
+  }, [vents, view, userLocation]);
+
+  const filteredVents = useMemo(() => {
+    if (!sortedVents) return [];
+    return selectedEmotion === "All"
+      ? sortedVents
+      : sortedVents.filter((v: any) => v.emotion === selectedEmotion);
+  }, [sortedVents, selectedEmotion]);
 
   // If the user filters the feed away from the currently expanded vent, collapse it.
   useEffect(() => {
     if (!activeVentId) return;
-    const stillVisible = filteredVents.some((v) => v.id === activeVentId);
+    const stillVisible = filteredVents.some((v: any) => v.id === activeVentId);
     if (!stillVisible) setActiveVentId(null);
-  }, [selectedEmotion, vents]);
+  }, [filteredVents, activeVentId]);
 
   useEffect(() => {
-    fetchVents(0);
-    setPage(0);
-    setHasMore(true);
+    if (view === "Nearby") {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition((pos) => {
+          setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+        });
+      }
+    }
+  }, [view]);
 
+  useEffect(() => {
     const fetchFollowData = async () => {
       if (!user) return;
       
@@ -854,74 +1166,23 @@ const VentFeed = () => {
       ]);
 
       if (!following.error && following.data) {
-        setFollowingIds(following.data.map(f => f.following_id));
+        setFollowingIds(new Set(following.data.map(f => f.following_id)));
       }
       if (!followers.error && followers.data) {
-        setFollowerIds(followers.data.map(f => f.follower_id));
+        setFollowerIds(new Set(followers.data.map(f => f.follower_id)));
       }
     };
-
+    
     fetchFollowData();
+  }, [user, supabase]);
 
-    const channel = supabase
-      .channel('neural-feed-v4')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vents' }, async (p) => {
-           const { data: profile } = await supabase.from('profiles').select('username').eq('id', p.new.user_id).single();
-           setVents(prev => [{ ...p.new, profiles: profile, vent_reactions: [] }, ...prev]);
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vent_reactions' }, (p) => {
-           setVents(prev => prev.map(v => v.id === p.new.vent_id ? {
-             ...v,
-             vent_reactions: [
-               ...(Array.isArray(v.vent_reactions) ? v.vent_reactions.filter((r: any) => r.user_id !== p.new.user_id) : []),
-               p.new
-             ]
-           } : v));
-      })
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vent_reactions' }, (p) => {
-           setVents(prev => prev.map(v => v.id === p.new.vent_id ? {
-             ...v,
-             vent_reactions: [
-               ...(Array.isArray(v.vent_reactions) ? v.vent_reactions.filter((r: any) => r.user_id !== p.new.user_id) : []),
-               p.new
-             ]
-           } : v));
-      })
-      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'vent_reactions' }, (p) => {
-           if (p.old && p.old.vent_id) {
-             setVents(prev => prev.map(v => v.id === p.old.vent_id ? {
-               ...v,
-               vent_reactions: Array.isArray(v.vent_reactions) 
-                ? v.vent_reactions.filter((r: any) => r.user_id !== p.old.user_id) 
-                : []
-             } : v));
-           } else if (p.old && p.old.id) {
-             setVents(prev => prev.map(v => ({
-               ...v,
-               vent_reactions: Array.isArray(v.vent_reactions) 
-                ? v.vent_reactions.filter((r: any) => r.id !== p.old.id) 
-                : []
-             })));
-           }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [supabase, view, user, fetchVents]);
-
-  // Infinite scroll
+  // Infinite scroll trigger
   useEffect(() => {
     if (!hasMore || loading || isFetchingMore) return;
 
     const observer = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting) {
-        setPage(prev => {
-          const nextPage = prev + 1;
-          fetchVents(nextPage);
-          return nextPage;
-        });
+        setPage(prev => prev + 1);
       }
     }, { threshold: 0.1 });
 
@@ -929,7 +1190,8 @@ const VentFeed = () => {
     if (target) observer.observe(target);
 
     return () => observer.disconnect();
-  }, [hasMore, loading, isFetchingMore, fetchVents]);
+  }, [hasMore, loading, isFetchingMore]);
+
 
   if (loading) {
     return (
@@ -939,18 +1201,9 @@ const VentFeed = () => {
     );
   }
 
-  if (vents.length === 0 && !loading) {
-    return (
-      <div className="flex flex-col items-center justify-center h-80 bg-neutral-900/40 rounded-[3rem] border border-dashed border-white/5 opacity-50">
-        <RiBubbleChartLine size={64} className="text-emerald-500 mb-4 animate-bounce-slow" />
-        <p className="text-neutral-500 font-black uppercase tracking-widest text-xs italic">The neural link is currently silent...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-y-4 md:gap-y-4 p-4 lg:p-6 pb-24 max-w-[700px] mx-auto">
-      {/* View Switcher */}
+      {/* View Switcher - Always Visible */}
       {user && (
         <div className="flex items-center gap-x-2 bg-neutral-900/40 p-1.5 rounded-2xl border border-white/5 w-fit mb-2">
           <button
@@ -964,6 +1217,16 @@ const VentFeed = () => {
             Global
           </button>
           <button
+            onClick={() => setView("Nearby")}
+            className={twMerge(
+              "flex items-center gap-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
+              view === "Nearby" ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20" : "text-neutral-500 hover:text-white"
+            )}
+          >
+            <RiHandHeartLine size={14} />
+            Nearby
+          </button>
+          <button
             onClick={() => setView("Following")}
             className={twMerge(
               "flex items-center gap-x-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all",
@@ -975,6 +1238,14 @@ const VentFeed = () => {
           </button>
         </div>
       )}
+
+      {vents.length === 0 && !loading ? (
+        <div className="flex flex-col items-center justify-center h-80 bg-neutral-900/40 rounded-[3rem] border border-dashed border-white/5 opacity-50">
+          <RiBubbleChartLine size={64} className="text-emerald-500 mb-4 animate-bounce-slow" />
+          <p className="text-neutral-500 font-black uppercase tracking-widest text-[9px] italic">The neural link is currently silent in this frequency...</p>
+        </div>
+      ) : (
+        <>
 
       {/* Premium Emotion Filter Bar */}
       <div className="flex items-center gap-x-4 overflow-x-auto pb-4 scrollbar-hide">
@@ -1024,11 +1295,13 @@ const VentFeed = () => {
             setReactionPickerId={setReactionPickerId}
             toggleReaction={toggleReaction}
             router={router}
-            isFollowing={followingIds.includes(vent.user_id)}
-            isFollower={followerIds.includes(vent.user_id)}
+            isFollowing={followingIds.has(vent.user_id)}
+            isFollower={followerIds.has(vent.user_id)}
             toggleFollow={toggleFollow}
             view={view}
             supabase={supabase}
+            userLocation={userLocation}
+            handleShare={handleShare}
           />
         ))}
       </AnimatePresence>
@@ -1042,6 +1315,8 @@ const VentFeed = () => {
           <p className="text-[9px] font-black uppercase tracking-[0.4em] text-neutral-700">All resonant echoes captured</p>
         )}
       </div>
+      </>
+      )}
     </div>
   );
 };
