@@ -5,20 +5,9 @@ import Header from "@/components/Header";
 import VentFeed from "@/components/VentFeed";
 import VentForm from "@/components/VentForm";
 import BlackSheepAssistant from "@/components/BlackSheepAssistant";
-import dynamic from "next/dynamic";
-import { motion, AnimatePresence } from "framer-motion";
-import { RiBubbleChartLine, RiMap2Line, RiBubbleChartFill } from "react-icons/ri";
+import { motion } from "framer-motion";
+import { RiBubbleChartFill } from "react-icons/ri";
 import { HiOutlinePlusCircle } from "react-icons/hi2";
-import { twMerge } from "tailwind-merge";
-
-const Map = dynamic(() => import("./Map"), { 
-    ssr: false,
-    loading: () => (
-        <div className="h-[600px] w-full bg-neutral-900 animate-pulse rounded-[3rem] flex items-center justify-center">
-            <p className="text-neutral-500 font-black uppercase tracking-[0.5em] italic">Initializing Grid...</p>
-        </div>
-    )
-});
 
 const HomeClient = ({ initialVents }: { initialVents?: any[] }) => {
     const [showPostForm, setShowPostForm] = useState(false);
