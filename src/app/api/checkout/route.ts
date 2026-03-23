@@ -23,12 +23,12 @@ export async function POST(req: Request) {
       .eq('id', user.id)
       .single();
 
-    let customerId = profile?.stripe_customer_id;
+    let customerId = (profile?.stripe_customer_id as string) ?? null;
 
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
-        name: profile?.full_name || user.email,
+        name: (profile?.full_name as string) || user.email,
         metadata: {
           supabaseUUID: user.id,
         },

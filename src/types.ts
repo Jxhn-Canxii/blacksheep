@@ -8,6 +8,8 @@ export interface UserDetails {
     website?: string;
     followers_count?: number;
     is_verified?: boolean;
+    stripe_subscription_id: string;
+    stripe_customer_id: string;
     plan_type?: 'free' | 'premium';
     show_verified_badge?: boolean;
   }
