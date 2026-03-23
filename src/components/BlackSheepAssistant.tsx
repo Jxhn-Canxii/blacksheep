@@ -31,6 +31,13 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
   const [checkInNote, setNote] = useState("");
   const [checkInEmotion, setCheckInEmotion] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isSuccess, setIsSuccess] = useState(false);
+
+  // Sync prediction with vents and history
+  useEffect(() => {
+    const newPrediction = predictEmotion(vents, lastEmotion);
+    setPrediction(newPrediction);
+  }, [vents.length, lastEmotion?.created_at]);
 
   // Sync checkInEmotion with prediction when prediction changes
   useEffect(() => {
@@ -58,21 +65,30 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
     fetchLastEmotion();
   }, [user, supabase]);
 
-  // Random Interval Check-in Logic
+  // Random Interval & Initial Check-in Logic
   useEffect(() => {
     if (!user) return;
 
+    // Initial check-in prompt on login/mount
+    const timeout = setTimeout(() => {
+      setIsOpen(true);
+      setShowCheckIn(true);
+    }, 2000); // Wait 2 seconds before popping up
+
     const checkInterval = setInterval(() => {
-      // 20% chance to prompt for a check-in every 5 minutes
-      const shouldPrompt = Math.random() < 0.2;
+      // 10% chance to prompt for a check-in every 10 minutes (less annoying)
+      const shouldPrompt = Math.random() < 0.1;
       if (shouldPrompt && !isOpen) {
         setIsOpen(true);
         setShowCheckIn(true);
       }
-    }, 5 * 60 * 1000);
+    }, 10 * 60 * 1000);
 
-    return () => clearInterval(checkInterval);
-  }, [user, isOpen]);
+    return () => {
+      clearTimeout(timeout);
+      clearInterval(checkInterval);
+    };
+  }, [user]);
 
   const handleCheckIn = async () => {
     if (!user) return;
@@ -92,10 +108,16 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
       if (!response.ok) throw new Error('Failed to save to server');
       
       toast.success("Emotional signal recorded on server.");
+      setIsSuccess(true);
       setShowCheckIn(false);
       setNote("");
       // Refresh last emotion after check-in
       setLastEmotion({ emotion: checkInEmotion || prediction, intensity, created_at: new Date().toISOString() });
+      
+      // Reset success state after 4 seconds
+      setTimeout(() => {
+        setIsSuccess(false);
+      }, 4000);
     } catch (error) {
       toast.error("Failed to record emotional signal.");
     }
@@ -103,10 +125,19 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
   };
 
   // Simple Emotion Prediction Logic
-  const predictEmotion = (vents: any[]) => {
-    if (!vents || vents.length === 0) return "Neutral";
-    
+  const predictEmotion = (vents: any[], last?: any) => {
+    // Collect all emotion signals
     const emotions = vents.map(v => v.emotion).filter(Boolean);
+    
+    // Also consider the most recent ledger entry as a strong signal
+    if (last?.emotion) {
+      emotions.push(last.emotion);
+      // Push it twice to give it more weight
+      emotions.push(last.emotion);
+    }
+
+    if (emotions.length === 0) return "Neutral";
+    
     const counts: Record<string, number> = {};
     emotions.forEach(e => counts[e] = (counts[e] || 0) + 1);
     
@@ -273,13 +304,13 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
   ];
 
   return (
-    <div className="fixed bottom-8 right-8 z-[9999]">
+    <div className="fixed bottom-10 right-4 z-[9999] flex items-end gap-x-4">
       <AnimatePresence>
         {isOpen && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.8, y: 20, rotate: -5 }}
-            animate={{ opacity: 1, scale: 1, y: 0, rotate: 0 }}
-            exit={{ opacity: 0, scale: 0.8, y: 20, rotate: 5 }}
+            initial={{ opacity: 0, scale: 0.8, x: 20, rotate: -5 }}
+            animate={{ opacity: 1, scale: 1, x: 0, rotate: 0 }}
+            exit={{ opacity: 0, scale: 0.8, x: 20, rotate: 5 }}
             className="mb-4 w-80 bg-neutral-900/80 backdrop-blur-2xl border border-emerald-500/30 rounded-[2.5rem] p-7 shadow-[0_0_50px_rgba(16,185,129,0.2)] relative"
           >
             {/* Animated Background Glow */}
@@ -299,9 +330,9 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
               <HiXMark size={20} />
             </button>
 
-            <div className="flex flex-col items-center text-center space-y-5 relative z-10">
+            <div className="flex flex-col items-center text-center space-y-5 relative z-10 pt-16">
               {/* Mascot Container with Particles - REBALANCED SIZE */}
-              <div className="w-44 h-44 relative -mt-28 z-30">
+              <div className="w-40 h-40 absolute -top-20 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
                 <AnimatePresence>
                   {particles.map((p) => (
                     <motion.span
@@ -327,12 +358,19 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
 
                 {/* The Custom Mascot */}
                 <motion.div
-                  animate={{ 
+                  animate={isSuccess ? {
+                    scale: [1, 1.3, 1],
+                    rotate: [0, 360],
+                    y: [0, -30, 0]
+                  } : { 
                     y: [0, -12, 0],
                     rotate: [-3, 3, -3],
                     scale: [1, 1.05, 1]
                   }}
-                  transition={{ 
+                  transition={isSuccess ? { 
+                    duration: 1, 
+                    ease: "backOut" 
+                  } : { 
                     duration: 5, 
                     repeat: Infinity, 
                     ease: "easeInOut" 
@@ -350,26 +388,28 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
                 </motion.div>
               </div>
 
-              <div className="space-y-2 pt-1">
+              <div className="space-y-2 pt-1 w-full">
                 <div className="flex flex-col items-center gap-y-2">
                   <div className="flex flex-col items-center">
                     <span className="text-[10px] font-black text-emerald-500 uppercase tracking-[0.4em] mb-1">Baara</span>
                     <p className="text-[11px] font-bold text-neutral-200 px-4 leading-relaxed italic">
-                      {getGreeting(prediction, lastEmotion)}
+                      {isSuccess ? "Signal locked in! I've updated your neural profile. ✨" : getGreeting(prediction, lastEmotion)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-x-2">
-                    <motion.h3 
-                      animate={{ opacity: [0.5, 1, 0.5] }}
-                      transition={{ duration: 2, repeat: Infinity }}
-                      className="text-[9px] font-black text-emerald-500 uppercase tracking-[0.3em] italic"
-                    >
-                      Emotion Detected
-                    </motion.h3>
-                    <div className="bg-emerald-500/10 px-3 py-0.5 rounded-full border border-emerald-500/20">
-                      <span className="text-[10px] font-black text-white italic tracking-tight">{prediction}</span>
+                  {!isSuccess && prediction !== "Neutral" && prediction !== "None" && (
+                    <div className="flex items-center gap-x-2">
+                      <motion.h3 
+                        animate={{ opacity: [0.5, 1, 0.5] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className="text-[9px] font-black flex items-center text-emerald-500 uppercase tracking-[0.3em] italic"
+                      >
+                        Emotion Detected
+                      </motion.h3>
+                      <div className="bg-emerald-500/10 px-3 py-0.5 rounded-full border border-emerald-500/20">
+                        <span className="text-[10px] font-black text-white italic tracking-tight">{prediction}</span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 
@@ -445,6 +485,22 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
                         </button>
                       </div>
                     </div>
+                  ) : isSuccess ? (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.9 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      className="flex flex-col items-center space-y-2 px-4"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 mb-1 border border-emerald-500/20">
+                        <HiCheck size={18} />
+                      </div>
+                      <p className="text-[11px] text-emerald-500 font-black italic uppercase tracking-widest text-center leading-relaxed">
+                        Signal Recorded!
+                      </p>
+                      <p className="text-[10px] text-neutral-400 font-medium italic text-center">
+                        Thank you for sharing your resonance with the grid.
+                      </p>
+                    </motion.div>
                   ) : (
                     <motion.p 
                       initial={{ opacity: 0 }}

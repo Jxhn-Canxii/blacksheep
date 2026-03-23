@@ -60,6 +60,30 @@ const VentForm = () => {
     setLoading(true);
 
     const postVent = async (location?: { latitude: number, longitude: number }) => {
+        // Handle offline submission
+        if (!navigator.onLine) {
+            const offlineVent = {
+                id: crypto.randomUUID(),
+                content,
+                emotion,
+                user_id: user.id,
+                location,
+                created_at: new Date().toISOString(),
+                is_offline: true
+            };
+            
+            // Save to localStorage
+            const pendingVents = JSON.parse(localStorage.getItem('pending_vents') || '[]');
+            localStorage.setItem('pending_vents', JSON.stringify([...pendingVents, offlineVent]));
+            
+            toast.success("Signal cached locally. Synchronizing when online...", { icon: '📦' });
+            setContent("");
+            setEmotion("");
+            setLastSubmitTime(Date.now());
+            setLoading(false);
+            return;
+        }
+
         const { error } = await (supabase as any)
             .from("vents")
             .insert([{ content, emotion, user_id: user.id, location }]);

@@ -59,49 +59,46 @@ export default function UserProvider({ children }: { children: React.ReactNode }
     }
   }, [user, refreshProfile]);
 
-  // Background Location & Presence Service
+  // Background Location & Presence Update (Optimized)
   useEffect(() => {
     if (!user) return;
 
-    const updatePresence = () => {
-      // Avoid re-rendering or background work when away from browser (Task 14 in TODO)
-      if (document.visibilityState === 'hidden') return;
+    const updatePresence = async () => {
+      // Only update if the tab is active to save requests
+      if (document.visibilityState !== 'visible') return;
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(async (position) => {
-          const { latitude, longitude } = position.coords;
-          await (supabase.from('profiles') as any)
-            .update({ 
-              last_location: { latitude, longitude },
-              last_seen: new Date().toISOString()
-            })
-            .eq('id', user.id);
-        }, (err) => {
-          console.warn("Location synchronization paused: Geolocation unavailable or denied.");
-        }, {
-          enableHighAccuracy: false, // Optimized first mentality
-          timeout: 10000,
-          maximumAge: 60000
-        });
+      const { data: location } = await new Promise((resolve) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve({ data: { latitude: pos.coords.latitude, longitude: pos.coords.longitude } }),
+          () => resolve({ data: null }),
+          { timeout: 10000 }
+        );
+      }) as any;
+
+      await (supabase.from('profiles') as any)
+        .update({ 
+          last_seen: new Date().toISOString(),
+          last_location: location || null
+        })
+        .eq('id', user.id);
+    };
+
+    // Update every 10 minutes instead of 5 to reduce load
+    const interval = setInterval(updatePresence, 10 * 60 * 1000);
+    
+    // Also update on visibility change (debounced)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        updatePresence();
       }
     };
 
-    // Initial sycn
-    updatePresence();
-    
-    // Timely update every 5 minutes (Task 8 in TODO)
-    const interval = setInterval(updatePresence, 300000); 
-    
-    // Tab visibility change listener to avoid irrelevant background work
-    const handleVisibility = () => {
-      if (document.visibilityState === 'visible') updatePresence();
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    updatePresence(); // Initial update
 
     return () => {
       clearInterval(interval);
-      document.removeEventListener('visibilitychange', handleVisibility);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [user, supabase]);
 

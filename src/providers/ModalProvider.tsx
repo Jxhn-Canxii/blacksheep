@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import AuthModal from "@/components/AuthModal";
 import ProfileReminderModal from "@/components/modals/ProfileReminderModal";
 
 const ModalProvider = () => {
@@ -18,7 +17,6 @@ const ModalProvider = () => {
 
   return (
     <>
-      <AuthModal />
       <ProfileReminderModal />
     </>
   );

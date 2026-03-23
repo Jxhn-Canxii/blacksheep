@@ -13,11 +13,23 @@ type SupabaseContext = {
 
 const Context = createContext<SupabaseContext | undefined>(undefined);
 
-export default function SupabaseProvider({ children }: { children: React.ReactNode }) {
-  const [supabase] = useState(() => createBrowserClient<Database>(
+// Ensure the client is a singleton outside the component lifecycle
+// to prevent orphaned auth locks in React Strict Mode.
+let clientInstance: SupabaseClient<Database> | undefined;
+
+function getSupabaseClient() {
+  if (clientInstance) return clientInstance;
+  
+  clientInstance = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  ));
+  );
+  
+  return clientInstance;
+}
+
+export default function SupabaseProvider({ children }: { children: React.ReactNode }) {
+  const [supabase] = useState(() => getSupabaseClient());
   const [session, setSession] = useState<Session | null>(null);
 
   useEffect(() => {

@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BiSearch } from "react-icons/bi";
 import { HiChatBubbleLeftRight, HiSparkles } from "react-icons/hi2";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useUser } from "@/providers/UserProvider";
 import { twMerge } from "tailwind-merge";
 import dynamic from "next/dynamic";

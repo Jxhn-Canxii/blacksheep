@@ -4,8 +4,8 @@ import { useEffect, useState, useMemo } from "react";
 import { useSupabase } from "@/providers/SupabaseProvider";
 import { useUser } from "@/providers/UserProvider";
 import { motion } from "framer-motion";
-import { HiOutlineArrowLeft, HiOutlineBookOpen, HiOutlineAdjustmentsHorizontal } from "react-icons/hi2";
-import { RiLineChartFill, RiHistoryLine, RiMentalHealthFill } from "react-icons/ri";
+import { HiOutlineBookOpen, HiOutlineAdjustmentsHorizontal } from "react-icons/hi2";
+import { RiLineChartFill, RiHistoryLine, RiMentalHealthFill, RiSparklingFill, RiVerifiedBadgeFill, RiSecurePaymentLine } from "react-icons/ri";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { twMerge } from "tailwind-merge";
@@ -13,32 +13,126 @@ import { twMerge } from "tailwind-merge";
 export default function EmotionalLedgerPage() {
   const router = useRouter();
   const { supabase } = useSupabase();
-  const { user } = useUser();
+  const { user, userDetails } = useUser();
   const [ledger, setLedger] = useState<any[]>([]);
+  const [vents, setVents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const isVerifiedPlanEnabled = process.env.NEXT_PUBLIC_ENABLE_VERIFIED_PLAN === 'true';
+
+  const handleToggleBadge = async () => {
+    if (!user || !userDetails) return;
+    const newValue = !userDetails.show_verified_badge;
+    
+    const { error } = await supabase
+      .from('profiles')
+      .update({ show_verified_badge: newValue })
+      .eq('id', user.id);
+    
+    if (!error) {
+      // refreshProfile is available in useUser
+      window.location.reload(); // Simple way to refresh for now
+    }
+  };
+
+  const handleCheckout = async () => {
+    try {
+      setIsProcessing(true);
+      const response = await fetch('/api/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priceId: 'price_verified_neural_link' }) // In production, use your real Stripe Price ID
+      });
+      
+      const { url } = await response.json();
+      if (url) window.location.href = url;
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchLedger = async () => {
-      if (!user) return;
-      const { data, error } = await supabase
-        .from('emotional_ledger')
-        .select('*')
-        .order('created_at', { ascending: false });
+    const fetchData = async () => {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
       
-      if (!error && data) setLedger(data);
-      setLoading(false);
+      setLoading(true);
+      try {
+        const [ledgerRes, ventsRes] = await Promise.all([
+          supabase
+            .from('emotional_ledger')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('vents')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: false })
+        ]);
+        
+        if (ledgerRes.error) {
+          console.error("Ledger Fetch Error:", ledgerRes.error);
+          toast.error("Unable to access emotional ledger. Please ensure your neural link is active.");
+        } else if (ledgerRes.data) {
+          setLedger(ledgerRes.data);
+        }
+
+        if (ventsRes.error) {
+          console.error("Vents Fetch Error:", ventsRes.error);
+        } else if (ventsRes.data) {
+          setVents(ventsRes.data);
+        }
+      } catch (err) {
+        console.error("System Error:", err);
+      } finally {
+        setLoading(false);
+      }
     };
 
-    fetchLedger();
+    fetchData();
   }, [user, supabase]);
 
-  const emotionStats = useMemo(() => {
+  const combinedHistory = useMemo(() => {
+    const combined = [
+      ...ledger.map(item => ({ ...item, type: 'ledger' })),
+      ...vents.map(item => ({ ...item, type: 'vent' }))
+    ];
+    return combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }, [ledger, vents]);
+
+  const stats = useMemo(() => {
+    const allEmotions = [...ledger, ...vents].map(item => item.emotion);
     const counts: Record<string, number> = {};
-    ledger.forEach(entry => {
-      counts[entry.emotion] = (counts[entry.emotion] || 0) + 1;
+    allEmotions.forEach(emotion => {
+      if (emotion) counts[emotion] = (counts[emotion] || 0) + 1;
     });
-    return Object.entries(counts).sort((a, b) => b[1] - a[1]);
-  }, [ledger]);
+
+    const sortedEmotions = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    
+    // Peak Activity Hour
+    const hours = combinedHistory.map(item => new Date(item.created_at).getHours());
+    const hourCounts: Record<number, number> = {};
+    hours.forEach(h => hourCounts[h] = (hourCounts[h] || 0) + 1);
+    const peakHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+
+    // Emotional Range (unique emotions)
+    const range = new Set(allEmotions).size;
+
+    return {
+      sortedEmotions,
+      peakHour: peakHour !== undefined ? `${peakHour}:00` : 'N/A',
+      range,
+      totalSignals: combinedHistory.length,
+      ledgerCount: ledger.length,
+      ventCount: vents.length
+    };
+  }, [ledger, vents, combinedHistory]);
 
   if (loading) {
     return (
@@ -54,12 +148,6 @@ export default function EmotionalLedgerPage() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="flex items-center gap-x-6">
-            <button
-              onClick={() => router.back()}
-              className="p-4 bg-white/5 rounded-2xl text-white hover:bg-emerald-500 hover:text-black transition-all border border-white/5"
-            >
-              <HiOutlineArrowLeft size={24} />
-            </button>
             <div className="space-y-1">
               <h1 className="text-white text-4xl font-black italic uppercase tracking-tighter">
                 Emotional <span className="text-emerald-500">Ledger</span>
@@ -70,30 +158,100 @@ export default function EmotionalLedgerPage() {
           <div className="bg-emerald-500/10 border border-emerald-500/20 px-6 py-3 rounded-2xl flex items-center gap-x-4">
             <RiMentalHealthFill className="text-emerald-500" size={24} />
             <div>
-              <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Total Checks</p>
-              <p className="text-xl font-black text-white italic">{ledger.length}</p>
+              <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Total Signals</p>
+              <p className="text-xl font-black text-white italic">{stats.totalSignals}</p>
             </div>
           </div>
         </div>
 
+        {/* Verified Badge / Subscription Section */}
+        {isVerifiedPlanEnabled && (
+          <div className="bg-neutral-800/20 border border-white/5 rounded-[2.5rem] p-8 relative overflow-hidden group">
+            <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[80px] rounded-full -mr-20 -mt-20 group-hover:bg-emerald-500/10 transition-all duration-700" />
+            
+            <div className="flex flex-col md:flex-row items-center justify-between gap-8 relative z-10">
+              <div className="flex items-center gap-x-6">
+                <div className={twMerge(
+                  "w-16 h-16 rounded-[1.5rem] flex items-center justify-center border transition-all duration-500",
+                  userDetails?.is_verified 
+                    ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-500 shadow-[0_0_20px_rgba(16,185,129,0.2)]" 
+                    : "bg-neutral-900 border-white/5 text-neutral-600"
+                )}>
+                  {userDetails?.is_verified ? <RiVerifiedBadgeFill size={32} /> : <RiSecurePaymentLine size={32} />}
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-x-2">
+                    <h3 className="text-white text-xl font-black italic uppercase tracking-tight">
+                      {userDetails?.is_verified ? "Verified Neural Link" : "Upgrade to Verified"}
+                    </h3>
+                    {userDetails?.is_verified && (
+                      <span className="bg-emerald-500 text-black text-[8px] font-black uppercase px-2 py-0.5 rounded-full">Active</span>
+                    )}
+                  </div>
+                  <p className="text-neutral-500 text-xs font-medium max-w-md">
+                    {userDetails?.is_verified 
+                      ? "Your signals are prioritized and authenticated on the global grid. Thank you for supporting the collective."
+                      : "Unlock the exclusive verified badge next to your signals and support the development of the neural network."}
+                  </p>
+                </div>
+              </div>
+
+              {userDetails?.is_verified ? (
+                <div className="flex items-center gap-x-4">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
+                    Badge Visibility
+                  </span>
+                  <button
+                    onClick={handleToggleBadge}
+                    className={twMerge(
+                      "w-12 h-6 rounded-full relative transition-all duration-300",
+                      userDetails.show_verified_badge !== false ? "bg-emerald-500" : "bg-neutral-700"
+                    )}
+                  >
+                    <motion.div
+                      animate={{ x: userDetails.show_verified_badge !== false ? 26 : 4 }}
+                      className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-lg"
+                    />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleCheckout}
+                  disabled={isProcessing}
+                  className="bg-white text-black px-8 py-4 rounded-2xl text-xs font-black italic uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-50 disabled:scale-100 flex items-center gap-x-3"
+                >
+                  {isProcessing ? (
+                    <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                  ) : (
+                    <>
+                      <RiSecurePaymentLine size={16} />
+                      Get Verified — $9.99/mo
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-neutral-800/40 rounded-[2rem] p-8 border border-white/5 space-y-6">
             <div className="flex items-center gap-x-3 text-neutral-400">
               <HiOutlineAdjustmentsHorizontal size={20} />
-              <h3 className="text-[10px] font-black uppercase tracking-widest">Dominant Frequency</h3>
+              <h3 className="text-[10px] font-black uppercase tracking-widest">Dominant Frequencies</h3>
             </div>
             <div className="space-y-4">
-              {emotionStats.slice(0, 3).map(([emotion, count]) => (
+              {stats.sortedEmotions.slice(0, 3).map(([emotion, count]) => (
                 <div key={emotion} className="space-y-2">
                   <div className="flex justify-between text-[10px] font-black uppercase italic">
                     <span className="text-white">{emotion}</span>
-                    <span className="text-emerald-500">{Math.round((count / ledger.length) * 100)}%</span>
+                    <span className="text-emerald-500">{Math.round((count / stats.totalSignals) * 100)}%</span>
                   </div>
                   <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
                     <motion.div 
                       initial={{ width: 0 }}
-                      animate={{ width: `${(count / ledger.length) * 100}%` }}
+                      animate={{ width: `${(count / stats.totalSignals) * 100}%` }}
                       className="h-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" 
                     />
                   </div>
@@ -102,83 +260,41 @@ export default function EmotionalLedgerPage() {
             </div>
           </div>
 
-          <div className="md:col-span-2 bg-neutral-800/40 rounded-[2rem] p-8 border border-white/5 relative overflow-hidden flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-4">
-              <div className="space-y-1">
-                <h3 className="text-white text-lg font-black italic uppercase tracking-tight">Timeline Visualization</h3>
-                <p className="text-neutral-500 text-[8px] font-bold uppercase tracking-widest">Neural Resonance Over Time</p>
+          <div className="bg-neutral-800/40 rounded-[2rem] p-8 border border-white/5 flex flex-col justify-center items-center text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20">
+              <RiHistoryLine size={24} />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Peak Activity</p>
+              <p className="text-2xl font-black text-white italic">{stats.peakHour}</p>
+            </div>
+          </div>
+
+          <div className="bg-neutral-800/40 rounded-[2rem] p-8 border border-white/5 flex flex-col justify-center items-center text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-500 border border-purple-500/20">
+              <RiSparklingFill size={24} className="text-purple-500" />
+            </div>
+            <div className="space-y-1">
+              <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Emotional Range</p>
+              <p className="text-2xl font-black text-white italic">{stats.range} <span className="text-[10px] text-neutral-600">types</span></p>
+            </div>
+          </div>
+
+          <div className="bg-neutral-800/40 rounded-[2rem] p-8 border border-white/5 flex flex-col justify-center items-center text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20">
+              <div className="flex gap-0.5">
+                <div className="w-1.5 h-3 bg-emerald-500/40 rounded-full" />
+                <div className="w-1.5 h-5 bg-emerald-500 rounded-full" />
+                <div className="w-1.5 h-4 bg-emerald-500/60 rounded-full" />
               </div>
-              <RiLineChartFill size={20} className="text-emerald-500" />
             </div>
-
-            <div className="flex-1 min-h-[150px] w-full relative group">
-              {ledger.length > 1 ? (
-                <div className="w-full h-full pt-4">
-                  <svg className="w-full h-full overflow-visible" viewBox="0 0 100 40" preserveAspectRatio="none">
-                    {/* Grid Lines */}
-                    {[0, 10, 20, 30, 40].map((y) => (
-                      <line 
-                        key={y} x1="0" y1={y} x2="100" y2={y} 
-                        stroke="rgba(255,255,255,0.03)" strokeWidth="0.5" 
-                      />
-                    ))}
-                    
-                    {/* The Path */}
-                    <motion.path
-                      initial={{ pathLength: 0, opacity: 0 }}
-                      animate={{ pathLength: 1, opacity: 1 }}
-                      transition={{ duration: 2, ease: "easeInOut" }}
-                      d={`M ${ledger.slice(0, 10).reverse().map((entry, i) => {
-                        const x = (i / (Math.min(ledger.length, 10) - 1)) * 100;
-                        const y = 40 - (entry.intensity / 10) * 40;
-                        return `${x} ${y}`;
-                      }).join(' L ')}`}
-                      fill="none"
-                      stroke="url(#gradient)"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    
-                    {/* Points */}
-                    {ledger.slice(0, 10).reverse().map((entry, i) => {
-                      const x = (i / (Math.min(ledger.length, 10) - 1)) * 100;
-                      const y = 40 - (entry.intensity / 10) * 40;
-                      return (
-                        <motion.circle
-                          key={entry.id}
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
-                          transition={{ delay: 1 + i * 0.1 }}
-                          cx={x} cy={y} r="1.5"
-                          fill="#10b981"
-                          className="drop-shadow-[0_0_5px_rgba(16,185,129,1)]"
-                        />
-                      );
-                    })}
-
-                    <defs>
-                      <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                        <stop offset="0%" stopColor="rgba(16,185,129,0)" />
-                        <stop offset="50%" stopColor="rgba(16,185,129,1)" />
-                        <stop offset="100%" stopColor="rgba(16,185,129,0.2)" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                </div>
-              ) : (
-                <div className="w-full h-full flex flex-col justify-center items-center text-center space-y-4 opacity-40">
-                  <RiLineChartFill size={48} className="text-emerald-500/20" />
-                  <p className="text-neutral-500 text-[10px] font-bold uppercase tracking-widest leading-relaxed max-w-xs">
-                    Graph rendering will stabilize after more neural check-ins.
-                  </p>
-                </div>
-              )}
-            </div>
-            
-            <div className="flex justify-between mt-4 text-[7px] font-black text-neutral-600 uppercase tracking-widest">
-              <span>PAST SIGNALS</span>
-              <span>LATEST</span>
+            <div className="space-y-1">
+              <p className="text-[8px] font-black text-neutral-500 uppercase tracking-widest">Vibe Ratio</p>
+              <div className="flex items-center gap-x-2">
+                <p className="text-lg font-black text-white italic">{stats.ledgerCount}<span className="text-[8px] text-neutral-600 ml-1">CHK</span></p>
+                <span className="text-neutral-700">/</span>
+                <p className="text-lg font-black text-emerald-500 italic">{stats.ventCount}<span className="text-[8px] text-neutral-600 ml-1">VNT</span></p>
+              </div>
             </div>
           </div>
         </div>
@@ -192,7 +308,7 @@ export default function EmotionalLedgerPage() {
           </div>
 
           <div className="space-y-4">
-            {ledger.map((entry) => (
+            {combinedHistory.map((entry) => (
               <motion.div 
                 key={entry.id}
                 initial={{ opacity: 0, x: -20 }}
@@ -201,29 +317,47 @@ export default function EmotionalLedgerPage() {
               >
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex items-center gap-x-6">
-                    <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 text-xs font-black italic border border-emerald-500/20 group-hover:scale-110 transition-transform">
-                      {entry.intensity}/10
+                    <div className={twMerge(
+                      "w-12 h-12 rounded-2xl flex items-center justify-center text-xs font-black italic border transition-transform group-hover:scale-110",
+                      entry.type === 'ledger' 
+                        ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" 
+                        : "bg-blue-500/10 text-blue-400 border-blue-500/20"
+                    )}>
+                      {entry.type === 'ledger' ? `${entry.intensity}/10` : 'VNT'}
                     </div>
                     <div className="space-y-1 text-left">
                       <div className="flex items-center gap-x-2">
-                        <span className="text-emerald-500 text-[10px] font-black uppercase tracking-[0.2em]">{entry.emotion}</span>
+                        <span className={twMerge(
+                          "text-[10px] font-black uppercase tracking-[0.2em]",
+                          entry.type === 'ledger' ? "text-emerald-500" : "text-blue-400"
+                        )}>
+                          {entry.emotion}
+                        </span>
                         <span className="w-1 h-1 bg-neutral-700 rounded-full" />
                         <span className="text-neutral-500 text-[9px] font-bold uppercase">{format(new Date(entry.created_at), 'MMM dd, yyyy • HH:mm')}</span>
+                        {entry.type === 'vent' && (
+                          <span className="bg-blue-500/5 text-blue-400/50 text-[7px] font-black uppercase px-2 py-0.5 rounded-full border border-blue-500/10">Externalized</span>
+                        )}
                       </div>
                       <p className="text-white text-sm font-medium italic">
-                        {entry.note || "No contextual signal recorded."}
+                        {entry.type === 'ledger' 
+                          ? (entry.note || "No contextual signal recorded.")
+                          : (entry.content || "Vent content archived.")
+                        }
                       </p>
                     </div>
                   </div>
-                  <div className="flex gap-x-1">
-                    {[...Array(entry.intensity)].map((_, i) => (
-                      <div key={i} className="w-1 h-1 bg-emerald-500/40 rounded-full" />
-                    ))}
-                  </div>
+                  {entry.type === 'ledger' && (
+                    <div className="flex gap-x-1">
+                      {[...Array(entry.intensity)].map((_, i) => (
+                        <div key={i} className="w-1 h-1 bg-emerald-500/40 rounded-full" />
+                      ))}
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}
-            {ledger.length === 0 && (
+            {combinedHistory.length === 0 && (
               <div className="py-20 text-center opacity-20 space-y-4">
                 <HiOutlineBookOpen size={48} className="mx-auto" />
                 <p className="text-[10px] font-black uppercase tracking-[0.4em] italic">Ledger empty. Awaiting first signal...</p>

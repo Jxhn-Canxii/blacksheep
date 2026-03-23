@@ -5,7 +5,7 @@ import { useSupabase } from "@/providers/SupabaseProvider";
 import { useUser } from "@/providers/UserProvider";
 import { motion, AnimatePresence } from "framer-motion";
 import { HiOutlineArrowLeft, HiSparkles, HiUserGroup, HiOutlineChatBubbleBottomCenterText, HiOutlineChatBubbleOvalLeftEllipsis, HiHandHeart, HiOutlinePlusCircle } from "react-icons/hi2";
-import { RiHandHeartLine, RiShareForwardLine, RiBubbleChartFill } from "react-icons/ri";
+import { RiHandHeartLine, RiShareForwardLine, RiBubbleChartFill, RiLineChartFill } from "react-icons/ri";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
 import VentForm from "@/components/VentForm";
@@ -43,83 +43,51 @@ export default function ProfileClient({ profileId }: { profileId: string }) {
   const [replies, setReplies] = useState<Record<string, any[]>>({});
   const [loadingReplies, setLoadingReplies] = useState<Record<string, boolean>>({});
 
-  const fetchProfileData = async () => {
-    // Keep loading state only for initial fetch
-    if (page === 0) setLoading(true);
+  const fetchProfileData = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     
-    // Fetch profile info
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", profileId)
-      .single();
+    try {
+      const [
+        { data: profileData },
+        { data: ventsData },
+        { data: sharedData },
+        { data: groupsData },
+        { data: followData }
+      ] = await Promise.all([
+        supabase.from("profiles").select("*").eq("id", profileId).single(),
+        supabase.from("vents")
+          .select(`*, profiles(username, avatar_url, is_verified, show_verified_badge), vent_reactions(id, user_id, type)`)
+          .eq("user_id", profileId)
+          .order("created_at", { ascending: false })
+          .range(0, (page + 1) * ITEMS_PER_PAGE - 1),
+        supabase.from("pulse_shares")
+          .select(`vents(*, profiles(username, avatar_url, is_verified, show_verified_badge), vent_reactions(id, user_id, type))`)
+          .eq("user_id", profileId)
+          .order("created_at", { ascending: false, foreignTable: 'vents' })
+          .range(0, (page + 1) * ITEMS_PER_PAGE - 1),
+        supabase.from("group_members").select("groups(*)").eq("user_id", profileId),
+        currentUser ? supabase.from('follows').select('*').eq('follower_id', currentUser.id).eq('following_id', profileId).maybeSingle() : Promise.resolve({ data: null })
+      ]);
 
-    if (profileError) {
-      toast.error("Profile not found.");
+      if (profileData) setProfile(profileData);
+      if (ventsData) setVents(ventsData);
+      if (sharedData) setSharedVents(sharedData.map((s: any) => s.vents).filter(Boolean));
+      if (groupsData) setGroups(groupsData.map((g: any) => g.groups));
+      if (followData !== undefined) setIsFollowing(!!followData);
+    } catch (err) {
+      console.error("Error fetching profile data:", err);
+    } finally {
       setLoading(false);
-      return;
     }
-    setProfile(profileData);
-
-    // Fetch user's vents with reactions and profiles
-    const { data: ventsData } = await supabase
-      .from("vents")
-      .select(`
-        *,
-        profiles (
-          username,
-          avatar_url
-        ),
-        vent_reactions (id, user_id, type)
-      `)
-      .eq("user_id", profileId)
-      .order("created_at", { ascending: false })
-      .range(0, (page + 1) * ITEMS_PER_PAGE - 1);
-    setVents(ventsData || []);
-
-    // Fetch shared vents with reactions and profiles
-    const { data: sharedData } = await (supabase as any)
-      .from("pulse_shares")
-      .select(`
-        vents (
-          *,
-          profiles (username, avatar_url),
-          vent_reactions (id, user_id, type)
-        )
-      `)
-      .eq("user_id", profileId)
-      .order("created_at", { ascending: false, foreignTable: 'vents' })
-      .range(0, (page + 1) * ITEMS_PER_PAGE - 1);
-    
-    setSharedVents(sharedData?.map((s: any) => s.vents).filter(Boolean) || []);
-
-    // Fetch user's groups (circles they belong to)
-    const { data: groupsData } = await supabase
-      .from("group_members")
-      .select("groups(*)")
-      .eq("user_id", profileId);
-    
-    if (groupsData) {
-      setGroups(groupsData.map((g: any) => g.groups));
-    }
-
-    // Check if following
-    if (currentUser) {
-      const { data: followData } = await supabase
-        .from('follows')
-        .select('*')
-        .eq('follower_id', currentUser.id)
-        .eq('following_id', profileId)
-        .maybeSingle();
-      setIsFollowing(!!followData);
-    }
-
-    setLoading(false);
   };
 
   useEffect(() => {
-    fetchProfileData();
-  }, [supabase, profileId, currentUser, page]);
+    fetchProfileData(true);
+  }, [profileId]); // Only initial fetch on profileId change
+
+  useEffect(() => {
+    if (page > 0) fetchProfileData();
+  }, [page]); // Fetch more on pagination
 
   // Real-time listener for profile updates
   useEffect(() => {
@@ -335,6 +303,18 @@ export default function ProfileClient({ profileId }: { profileId: string }) {
             <span className="text-white text-lg font-black italic">{sharedVents.length}</span>
             <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest">Echoes</span>
           </div>
+          {isOwnProfile && (
+            <>
+              <div className="w-[1px] h-4 bg-white/10 shrink-0" />
+              <button 
+                onClick={() => router.push('/profile/ledger')}
+                className="flex items-center gap-x-2 shrink-0 hover:text-emerald-500 transition-colors group"
+              >
+                <RiLineChartFill className="text-emerald-500 group-hover:scale-110 transition-transform" size={18} />
+                <span className="text-[9px] font-black text-neutral-500 uppercase tracking-widest group-hover:text-emerald-500">View Ledger</span>
+              </button>
+            </>
+          )}
         </div>
 
         {/* Post Direct Vent - Only on own profile */}

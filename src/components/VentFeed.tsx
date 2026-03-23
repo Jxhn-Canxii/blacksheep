@@ -7,7 +7,7 @@ import { useSupabase } from "@/providers/SupabaseProvider";
 import { useUser } from "@/providers/UserProvider";
 import ReplyForm from "./ReplyForm";
 import { motion, AnimatePresence } from "framer-motion";
-import { RiBubbleChartLine, RiChatFollowUpFill, RiHeart2Line, RiHeart2Fill, RiUserFollowLine, RiGlobalLine, RiHandHeartLine, RiShareForwardLine } from "react-icons/ri";
+import { RiBubbleChartLine, RiChatFollowUpFill, RiHeart2Line, RiHeart2Fill, RiUserFollowLine, RiGlobalLine, RiHandHeartLine, RiShareForwardLine, RiVerifiedBadgeFill } from "react-icons/ri";
 import { HiChatBubbleOvalLeftEllipsis, HiSparkles, HiArrowTrendingUp, HiOutlineFaceSmile, HiOutlineChatBubbleLeftRight, HiShare } from "react-icons/hi2";
 import { twMerge } from "tailwind-merge";
 import { supabaseFetcher } from "@/libs/fetcher";
@@ -72,10 +72,13 @@ const ReplyItem = ({
       <div className="flex flex-col gap-y-1">
         <div className="flex items-center gap-x-2">
           <span className={twMerge(
-            "text-[10px] font-black italic uppercase transition-colors",
+            "text-[10px] font-black italic uppercase transition-colors flex items-center gap-x-1",
             level === 0 ? "text-emerald-500" : "text-emerald-500/70 group-hover/reply:text-emerald-500"
           )}>
             {replyDisplayName}
+            {isVerifiedPlanEnabled && reply.profiles?.is_verified && reply.profiles?.show_verified_badge !== false && (
+              <RiVerifiedBadgeFill className="text-emerald-500" size={10} title="Verified Neural Link" />
+            )}
           </span>
           <span className="text-[7px] text-neutral-700 font-mono">
             {new Date(reply.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -216,6 +219,8 @@ const VentCard = memo(({
   const [replies, setReplies] = useState<any[]>([]);
   const [loadingReplies, setLoadingReplies] = useState(false);
 
+  const isVerifiedPlanEnabled = process.env.NEXT_PUBLIC_ENABLE_VERIFIED_PLAN === 'true';
+
   const anonymousName = vent.user_id ? `Anonymous-${vent.user_id.slice(-4)}` : "Anonymous-0000";
   // Strict identity logic: 
   // 1. If view is "Following", show @username
@@ -238,7 +243,7 @@ const VentCard = memo(({
     setLoadingReplies(true);
     const { data, error } = await supabase
       .from('replies')
-      .select('*, profiles(username, avatar_url), reply_reactions(id, user_id, type)')
+      .select('*, profiles(username, avatar_url, is_verified, show_verified_badge), reply_reactions(id, user_id, type)')
       .eq('vent_id', vent.id)
       .order('created_at', { ascending: true });
     
@@ -306,7 +311,7 @@ const VentCard = memo(({
         }, async (payload: any) => {
           const { data: profile } = await supabase
             .from('profiles')
-            .select('username, avatar_url')
+            .select('username, avatar_url, is_verified, show_verified_badge')
             .eq('id', payload.new.user_id)
             .single();
           
@@ -335,7 +340,28 @@ const VentCard = memo(({
              })));
           }
         })
-        .subscribe();
+        .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'profiles'
+      }, () => {
+        mutateVents();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'profiles'
+      }, () => {
+        mutateVents();
+      })
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'profiles'
+      }, () => {
+        mutateVents();
+      })
+      .subscribe();
       
       return () => {
         supabase.removeChannel(channel);
@@ -365,9 +391,14 @@ const VentCard = memo(({
                         {displayName.charAt(displayName.startsWith('@') ? 1 : 0)}
                      </div>
                      <div className="flex flex-col">
-                        <span className="text-white text-sm font-black italic uppercase tracking-tighter">
-                          {displayName}
-                        </span>
+                        <div className="flex items-center gap-x-1">
+                          <span className="text-white text-sm font-black italic uppercase tracking-tighter">
+                            {displayName}
+                          </span>
+                          {isVerifiedPlanEnabled && vent.profiles?.is_verified && vent.profiles?.show_verified_badge !== false && (
+                            <RiVerifiedBadgeFill className="text-emerald-500" size={12} title="Verified Neural Link" />
+                          )}
+                        </div>
                         <div className="flex items-center gap-x-2">
                           {isFollower && !isFollowing && (
                             <span className="text-[8px] font-bold text-emerald-500/50 uppercase tracking-widest">Follows you</span>
@@ -650,6 +681,9 @@ const VentCard = memo(({
               <div className="flex flex-col">
                 <div className="flex items-center gap-x-2">
                   <span className="text-emerald-500 text-[10px] font-black uppercase tracking-widest italic">{displayName}</span>
+                  {isVerifiedPlanEnabled && vent.profiles?.is_verified && vent.profiles?.show_verified_badge !== false && (
+                    <RiVerifiedBadgeFill className="text-emerald-500" size={10} title="Verified Neural Link" />
+                  )}
                   {vent.emotion && (
                     <span className={twMerge(
                       "px-2 py-0.5 text-[6px] font-black uppercase tracking-widest rounded-md border",
@@ -891,6 +925,8 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
           *,
           profiles (
             username,
+            is_verified,
+            show_verified_badge,
             follower_count:follows!following_id(count)
           ),
           vent_reactions (id, user_id, type),

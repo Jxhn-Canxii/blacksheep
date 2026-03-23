@@ -81,7 +81,7 @@ export async function proxy(request: NextRequest) {
     default-src 'self';
     script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co https://cdnjs.cloudflare.com;
     style-src 'self' 'unsafe-inline' https://*.supabase.co https://cdnjs.cloudflare.com https://fonts.googleapis.com;
-    img-src 'self' blob: data: https://*.supabase.co https://cdnjs.cloudflare.com https://*.basemaps.cartocdn.com;
+    img-src 'self' blob: data: https://*.supabase.co https://cdnjs.cloudflare.com https://*.basemaps.cartocdn.com https://www.transparenttextures.com;
     font-src 'self' https://fonts.gstatic.com;
     connect-src 'self' https://*.supabase.co wss://*.supabase.co;
     frame-src 'self';

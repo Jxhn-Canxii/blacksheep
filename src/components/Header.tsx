@@ -9,7 +9,6 @@ import { HiArrowRightOnRectangle, HiMagnifyingGlass } from 'react-icons/hi2';
 import toast from 'react-hot-toast';
 import Swal from 'sweetalert2';
 
-import useAuthModal from "@/hooks/useAuthModal";
 import { useUser } from "@/providers/UserProvider";
 import { useSupabase } from "@/providers/SupabaseProvider";
 
@@ -23,7 +22,6 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ children, className }) => {
-  const authModal = useAuthModal();
   const router = useRouter();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
 
@@ -165,8 +163,8 @@ const Header: React.FC<HeaderProps> = ({ children, className }) => {
                 Home
               </Link>
               <div className="h-4 w-[1px] bg-white/10 mx-0.5 sm:mx-1" />
-              <button 
-                onClick={authModal.onOpen}
+              <Link 
+                href="/signup"
                 className="
                   text-neutral-400 
                   font-bold
@@ -180,9 +178,9 @@ const Header: React.FC<HeaderProps> = ({ children, className }) => {
                 "
               >
                 Sign up
-              </button>
+              </Link>
               <Button
-                onClick={authModal.onOpen}
+                onClick={() => router.push('/login')}
                 className="bg-white text-black px-3 sm:px-4 py-1.5 rounded-xl text-[10px] sm:text-xs font-black italic uppercase tracking-tighter hover:scale-105 transition-all shadow-xl whitespace-nowrap"
               >
                 Login

@@ -7,6 +7,9 @@ export interface UserDetails {
     username?: string;
     website?: string;
     followers_count?: number;
+    is_verified?: boolean;
+    plan_type?: 'free' | 'premium';
+    show_verified_badge?: boolean;
   }
 
 export interface Vent {
