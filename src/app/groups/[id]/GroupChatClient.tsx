@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { useUser } from "@/providers/UserProvider";
 import { useSupabase } from "@/providers/SupabaseProvider";
 import { motion, AnimatePresence } from "framer-motion";
-import { HiChatBubbleBottomCenterText, HiArrowLeft, HiRocketLaunch, HiUserPlus, HiXMark, HiCheckBadge, HiSparkles, HiShieldCheck, HiUserMinus, HiUser, HiShare, HiQrCode } from "react-icons/hi2";
+import { HiHashtag, HiChatBubbleBottomCenterText, HiArrowLeft, HiRocketLaunch, HiUserPlus, HiXMark, HiCheckBadge, HiSparkles, HiShieldCheck, HiUserMinus, HiUser, HiShare, HiQrCode } from "react-icons/hi2";
 import { useRouter } from "next/navigation";
 import { toast } from "react-hot-toast";
 import Swal from 'sweetalert2';
