@@ -112,13 +112,13 @@ const GroupCard = memo(({ group, i, user, joinGroup, loadingCircles }: any) => {
 
                 {isMember ? (
                   <Link href={`/groups/${group.id}`}
-                    className="h-14 px-8 bg-emerald-500 text-black rounded-2xl flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-emerald-500/20 hover:bg-white hover:scale-105 active:scale-95 transition-all"
+                    className="h-14 px-8 text-nowrap bg-emerald-500 text-black rounded-2xl flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] shadow-xl shadow-emerald-500/20 hover:bg-white hover:scale-105 active:scale-95 transition-all"
                   >
                     Open Portal
                   </Link>
                 ) : isPending ? (
                   <button disabled
-                    className="h-14 px-8 bg-white/5 text-neutral-500 border border-white/10 rounded-2xl flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] italic"
+                    className="h-14 px-8 bg-white/5 text-nowrap text-neutral-500 border border-white/10 rounded-2xl flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] italic"
                   >
                     Sync Pending...
                   </button>
@@ -126,7 +126,7 @@ const GroupCard = memo(({ group, i, user, joinGroup, loadingCircles }: any) => {
                   <button 
                     onClick={() => joinGroup(group.id, group.is_private)}
                     disabled={isSyncing}
-                    className="h-14 px-8 bg-white/5 text-white hover:bg-white hover:text-black border border-white/10 rounded-2xl flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:scale-105 active:scale-95 shadow-2xl disabled:opacity-50"
+                    className="h-14 px-8 bg-white/5 text-nowrap text-white hover:bg-white hover:text-black border border-white/10 rounded-2xl flex items-center justify-center text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:scale-105 active:scale-95 shadow-2xl disabled:opacity-50"
                   >
                     {isSyncing ? "Syncing..." : "Connect Frequency"}
                   </button>
@@ -246,8 +246,7 @@ const GroupsPage = () => {
           ...newGroup as any,
           _count: { group_members: 1 }
         };
-        setGroups(prev => [mapped, ...prev]);
-        setUserGroups(prev => [mapped, ...prev]);
+        mutate(prev => [mapped, ...(prev || [])], false);
       }
     } else {
       toast.error(error?.message || "Signal failure.");
@@ -311,7 +310,7 @@ const GroupsPage = () => {
             <div className="flex items-center gap-x-6 px-8 py-4 bg-white/5 backdrop-blur-3xl rounded-[2rem] border border-white/5 shadow-2xl">
                  <div className="flex flex-col items-end">
                      <span className="text-[9px] font-black uppercase text-emerald-500 tracking-[0.3em] leading-none mb-1">Active Spheres</span>
-                     <span className="text-3xl font-black italic text-white leading-none">{groups.length}</span>
+                     <span className="text-3xl font-black italic text-white leading-none">{groups?.length || 0}</span>
                  </div>
                  <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-500 border border-emerald-500/20">
                      <MdExplore size={24} className="animate-spin-slow" />

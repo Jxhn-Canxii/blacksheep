@@ -18,6 +18,7 @@ export interface Vent {
   content: string;
   user_id: string;
   emotion: string;
+  intensity?: number;
   location: {
     latitude: number;
     longitude: number;

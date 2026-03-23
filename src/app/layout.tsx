@@ -10,6 +10,7 @@ import MobileNav from "@/components/MobileNav";
 import PageTransition from "@/components/PageTransition";
 import NavigationLoader from "@/components/NavigationLoader";
 import ConnectionStatus from "@/components/ConnectionStatus";
+import BlackSheepAssistant from "@/components/BlackSheepAssistant";
 import { createClient } from "@/libs/supabaseServer";
 import { getCachedTrendingFeelings } from "@/libs/cachedQueries";
 
@@ -86,6 +87,7 @@ export default async function RootLayout({
                   </PageTransition>
                 </Sidebar>
                 <MobileNav />
+                <BlackSheepAssistant vents={trendingData} />
               </>
             ) : (
               <PageTransition>

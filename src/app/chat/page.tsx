@@ -154,7 +154,11 @@ const GlobalChatPage = () => {
         .insert([{ follower_id: user.id, following_id: targetUserId }]);
       
       if (!error) {
-        setFollowingIds(prev => new Set(prev).add(targetUserId));
+        setFollowingIds(prev => {
+          const next = new Set(prev);
+          next.add(targetUserId);
+          return next;
+        });
       }
     }
   };

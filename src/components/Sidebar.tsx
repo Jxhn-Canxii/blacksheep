@@ -6,7 +6,7 @@ import Link from "next/link";
 import { HiHome, HiChatBubbleLeftRight, HiUsers, HiHashtag, HiOutlineUser, HiOutlineBookOpen, HiOutlineArrowRightOnRectangle } from "react-icons/hi2";
 import { BiSearchAlt } from "react-icons/bi";
 import { MdGroups2 } from "react-icons/md";
-import { RiLineChartFill, RiBroadcastLine } from "react-icons/ri";
+import { RiLineChartFill, RiBroadcastLine, RiGlobalLine } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
 
 import SidebarItem from "./SidebarItem";
@@ -89,8 +89,14 @@ const Sidebar: React.FC<SidebarProps> = ({
       href: '/profiles',
     },
     {
+      icon: RiGlobalLine,
+      label: 'Vent Maps',
+      active: pathname === '/map',
+      href: '/map',
+    },
+    {
       icon: RiBroadcastLine,
-      label: 'Global',
+      label: 'Chat',
       active: pathname === '/chat',
       href: '/chat',
     },
@@ -110,8 +116,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     {
       icon: RiLineChartFill,
       label: 'Ledger',
-      active: pathname === '/profile/ledger',
-      href: '/profile/ledger',
+      active: pathname === '/ledger',
+      href: '/ledger',
     },
     {
       icon: HiOutlineUser,

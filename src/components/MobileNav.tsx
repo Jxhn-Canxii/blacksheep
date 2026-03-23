@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { HiHome, HiChatBubbleLeftRight, HiUsers, HiOutlineUser } from "react-icons/hi2";
 import { BiSearch } from "react-icons/bi";
 import { MdGroup } from "react-icons/md";
-import { RiBroadcastLine, RiLineChartFill } from "react-icons/ri";
+import { RiBroadcastLine, RiLineChartFill, RiGlobalLine } from "react-icons/ri";
 import Link from "next/link";
 import { twMerge } from "tailwind-merge";
 import { useUnreadCount } from "@/hooks/useUnreadCount";
@@ -35,8 +35,14 @@ const MobileNav = () => {
       href: '/profiles',
     },
     {
+      icon: RiGlobalLine,
+      label: 'Vent Maps',
+      active: pathname === '/map',
+      href: '/map',
+    },
+    {
       icon: RiBroadcastLine,
-      label: 'Global',
+      label: 'Chat',
       active: pathname === '/chat',
       href: '/chat',
     },
@@ -50,8 +56,8 @@ const MobileNav = () => {
     {
       icon: RiLineChartFill,
       label: 'Ledger',
-      active: pathname === '/profile/ledger',
-      href: '/profile/ledger',
+      active: pathname === '/ledger',
+      href: '/ledger',
     },
     {
       icon: MdGroup,

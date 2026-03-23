@@ -4,7 +4,6 @@ import { useState } from "react";
 import Header from "@/components/Header";
 import VentFeed from "@/components/VentFeed";
 import VentForm from "@/components/VentForm";
-import BlackSheepAssistant from "@/components/BlackSheepAssistant";
 import { motion } from "framer-motion";
 import { RiBubbleChartFill } from "react-icons/ri";
 import { HiOutlinePlusCircle } from "react-icons/hi2";
@@ -77,9 +76,6 @@ const HomeClient = ({ initialVents }: { initialVents?: any[] }) => {
             {/* Decorative background blurs */}
             <div className="fixed top-20 right-20 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
             <div className="fixed bottom-20 left-20 w-96 h-96 bg-teal-500/10 rounded-full blur-[120px] pointer-events-none" />
-
-            {/* Neural Assistant */}
-            <BlackSheepAssistant vents={initialVents || []} />
         </div>
     );
 };

@@ -5,7 +5,6 @@ const nextConfig: NextConfig = {
   output: "standalone",
   reactStrictMode: true,
 
-  // ✅ Point to monorepo root (IMPORTANT for Turbo)
   outputFileTracingRoot: path.join(__dirname, "../../"),
 
   images: {

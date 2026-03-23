@@ -7,19 +7,94 @@ import { motion } from "framer-motion";
 import { HiOutlineBookOpen, HiOutlineAdjustmentsHorizontal } from "react-icons/hi2";
 import { RiLineChartFill, RiHistoryLine, RiMentalHealthFill, RiSparklingFill, RiVerifiedBadgeFill, RiSecurePaymentLine } from "react-icons/ri";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
+import { format, subDays, startOfDay, isAfter } from "date-fns";
 import { twMerge } from "tailwind-merge";
+import useSWR from "swr";
+import { toast } from "react-hot-toast";
+import { 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer,
+  ReferenceLine
+} from 'recharts';
 
 export default function EmotionalLedgerPage() {
   const router = useRouter();
   const { supabase } = useSupabase();
   const { user, userDetails } = useUser();
-  const [ledger, setLedger] = useState<any[]>([]);
-  const [vents, setVents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
 
   const isVerifiedPlanEnabled = process.env.NEXT_PUBLIC_ENABLE_VERIFIED_PLAN === 'true';
+
+  // SWR Fetchers
+  const { data: ledger = [], mutate: mutateLedger, isLoading: loadingLedger } = useSWR(
+    user ? `ledger-${user.id}` : null,
+    async () => {
+      const { data, error } = await supabase
+        .from('emotional_ledger')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false });
+      if (error) {
+        toast.error("Unable to access emotional ledger.");
+        throw error;
+      }
+      return data || [];
+    }
+  );
+
+  const { data: vents = [], mutate: mutateVents, isLoading: loadingVents } = useSWR(
+    user ? `vents-${user.id}` : null,
+    async () => {
+      const { data, error } = await supabase
+        .from('vents')
+        .select('*')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data || [];
+    }
+  );
+
+  const loading = loadingLedger || loadingVents;
+
+  // Real-time Subscription for instant updates
+  useEffect(() => {
+    if (!user) return;
+
+    const ledgerChannel = supabase
+      .channel('ledger-updates')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'emotional_ledger',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        mutateLedger();
+      })
+      .subscribe();
+
+    const ventsChannel = supabase
+      .channel('vents-updates')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'vents',
+        filter: `user_id=eq.${user.id}`
+      }, () => {
+        mutateVents();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ledgerChannel);
+      supabase.removeChannel(ventsChannel);
+    };
+  }, [user, supabase, mutateLedger, mutateVents]);
 
   const handleToggleBadge = async () => {
     if (!user || !userDetails) return;
@@ -53,50 +128,6 @@ export default function EmotionalLedgerPage() {
       setIsProcessing(false);
     }
   };
-
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-      
-      setLoading(true);
-      try {
-        const [ledgerRes, ventsRes] = await Promise.all([
-          supabase
-            .from('emotional_ledger')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false }),
-          supabase
-            .from('vents')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('created_at', { ascending: false })
-        ]);
-        
-        if (ledgerRes.error) {
-          console.error("Ledger Fetch Error:", ledgerRes.error);
-          toast.error("Unable to access emotional ledger. Please ensure your neural link is active.");
-        } else if (ledgerRes.data) {
-          setLedger(ledgerRes.data);
-        }
-
-        if (ventsRes.error) {
-          console.error("Vents Fetch Error:", ventsRes.error);
-        } else if (ventsRes.data) {
-          setVents(ventsRes.data);
-        }
-      } catch (err) {
-        console.error("System Error:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, [user, supabase]);
 
   const combinedHistory = useMemo(() => {
     const combined = [
@@ -133,6 +164,35 @@ export default function EmotionalLedgerPage() {
       ventCount: vents.length
     };
   }, [ledger, vents, combinedHistory]);
+
+  const chartData = useMemo(() => {
+    // Last 7 days
+    const days = [...Array(7)].map((_, i) => {
+      const date = subDays(new Date(), i);
+      return {
+        date: startOfDay(date),
+        label: format(date, 'MMM dd'),
+        intensity: 0,
+        count: 0
+      };
+    }).reverse();
+
+    combinedHistory.forEach(item => {
+      const itemDate = new Date(item.created_at);
+      const day = days.find(d => startOfDay(itemDate).getTime() === d.date.getTime());
+      if (day) {
+        // Vents are treated as intensity 5 by default for the chart
+        const val = item.type === 'ledger' ? item.intensity : 5;
+        day.intensity += val;
+        day.count += 1;
+      }
+    });
+
+    return days.map(d => ({
+      ...d,
+      value: d.count > 0 ? Number((d.intensity / d.count).toFixed(1)) : 0
+    }));
+  }, [combinedHistory]);
 
   if (loading) {
     return (
@@ -296,6 +356,66 @@ export default function EmotionalLedgerPage() {
                 <p className="text-lg font-black text-emerald-500 italic">{stats.ventCount}<span className="text-[8px] text-neutral-600 ml-1">VNT</span></p>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Neural Resonance Chart */}
+        <div className="bg-neutral-800/20 border border-white/5 rounded-[2.5rem] p-8 space-y-8">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-x-4">
+              <RiLineChartFill className="text-emerald-500" size={20} />
+              <h2 className="text-white text-xl font-black italic uppercase tracking-tight">Resonance <span className="text-emerald-500">Timeline</span></h2>
+            </div>
+            <span className="text-[10px] font-black text-neutral-500 uppercase tracking-widest bg-white/5 px-3 py-1 rounded-full">Last 7 Cycles</span>
+          </div>
+
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                <XAxis 
+                  dataKey="label" 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#737373', fontSize: 10, fontWeight: 'bold' }}
+                  dy={10}
+                />
+                <YAxis 
+                  domain={[0, 10]} 
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#737373', fontSize: 10, fontWeight: 'bold' }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#171717', 
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    borderRadius: '1rem',
+                    fontSize: '10px',
+                    fontWeight: 'bold',
+                    textTransform: 'uppercase'
+                  }}
+                  itemStyle={{ color: '#10b981' }}
+                  cursor={{ stroke: '#10b981', strokeWidth: 1, strokeDasharray: '5 5' }}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke="#10b981" 
+                  strokeWidth={3}
+                  fillOpacity={1} 
+                  fill="url(#colorValue)" 
+                  animationDuration={2000}
+                />
+                <ReferenceLine y={5} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
         </div>
 

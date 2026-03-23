@@ -68,26 +68,9 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
   // Random Interval & Initial Check-in Logic
   useEffect(() => {
     if (!user) return;
+    
+    setShowCheckIn(true);
 
-    // Initial check-in prompt on login/mount
-    const timeout = setTimeout(() => {
-      setIsOpen(true);
-      setShowCheckIn(true);
-    }, 2000); // Wait 2 seconds before popping up
-
-    const checkInterval = setInterval(() => {
-      // 10% chance to prompt for a check-in every 10 minutes (less annoying)
-      const shouldPrompt = Math.random() < 0.1;
-      if (shouldPrompt && !isOpen) {
-        setIsOpen(true);
-        setShowCheckIn(true);
-      }
-    }, 10 * 60 * 1000);
-
-    return () => {
-      clearTimeout(timeout);
-      clearInterval(checkInterval);
-    };
   }, [user]);
 
   const handleCheckIn = async () => {
@@ -469,6 +452,18 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
                          </div>
                       </div>
 
+                      <div className="space-y-1.5">
+                         <div className="flex justify-between items-center text-[8px] font-black text-neutral-500 uppercase tracking-widest">
+                           <span>Context Note</span>
+                         </div>
+                         <textarea 
+                           value={checkInNote}
+                           onChange={(e) => setNote(e.target.value)}
+                           placeholder="Add neural context..."
+                           className="w-full bg-black/40 border border-white/5 rounded-xl p-2.5 text-[10px] text-white focus:border-emerald-500/50 outline-none resize-none h-16 scrollbar-hide font-medium italic placeholder:text-neutral-700"
+                         />
+                      </div>
+
                       <div className="flex gap-x-2">
                         <button 
                           onClick={handleCheckIn}
@@ -522,7 +517,7 @@ const BlackSheepAssistant = ({ vents }: BlackSheepAssistantProps) => {
                   Refresh
                 </button>
                 <button 
-                  onClick={() => router.push('/profile/ledger')}
+                  onClick={() => router.push('/ledger')}
                   className="group text-[9px] font-black text-neutral-500 hover:text-white uppercase tracking-widest flex items-center gap-x-2 transition-all bg-white/5 hover:bg-neutral-800 px-4 py-2 rounded-xl border border-white/5"
                 >
                   <RiLineChartFill size={12} />

@@ -307,7 +307,7 @@ export default function ProfileClient({ profileId }: { profileId: string }) {
             <>
               <div className="w-[1px] h-4 bg-white/10 shrink-0" />
               <button 
-                onClick={() => router.push('/profile/ledger')}
+                onClick={() => router.push('/ledger')}
                 className="flex items-center gap-x-2 shrink-0 hover:text-emerald-500 transition-colors group"
               >
                 <RiLineChartFill className="text-emerald-500 group-hover:scale-110 transition-transform" size={18} />
@@ -678,7 +678,7 @@ export default function ProfileClient({ profileId }: { profileId: string }) {
       </div>
 
       {/* Neural Assistant */}
-      <BlackSheepAssistant vents={vents} />
+      {/* <BlackSheepAssistant vents={vents} /> */}
     </div>
   );
 }

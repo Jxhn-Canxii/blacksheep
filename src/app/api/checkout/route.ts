@@ -51,8 +51,8 @@ export async function POST(req: Request) {
         },
       ],
       mode: 'subscription',
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/profile/ledger?success=true`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/profile/ledger?canceled=true`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/ledger?success=true`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/ledger?canceled=true`,
       metadata: {
         supabaseUUID: user.id,
       },

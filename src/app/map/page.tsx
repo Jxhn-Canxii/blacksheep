@@ -31,28 +31,31 @@ const MapPage = () => {
 
   return (
     <div className="h-full w-full overflow-hidden flex flex-col relative rounded-[2rem] border border-white/5">
-      {/* View Switcher Overlay (Floating) */}
+      {/* View Switcher Overlay (Floating) - Vertically Aligned on Left */}
       {user && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[1000] flex items-center gap-x-2 bg-black/60 backdrop-blur-3xl p-1.5 rounded-2xl border border-white/10 shadow-3xl pointer-events-auto">
+        <div className="absolute left-6 top-1/2 -translate-y-1/2 z-[1000] flex flex-col items-center gap-y-2 bg-black/60 backdrop-blur-3xl p-1.5 rounded-2xl border border-white/10 shadow-3xl pointer-events-auto">
           <button
             onClick={() => setView("private")}
+            title="Private Neural Link"
             className={twMerge(
-              "flex items-center gap-x-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all",
-              view === "private" ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30" : "text-neutral-500 hover:text-white"
+              "flex flex-col items-center justify-center gap-y-2 w-14 h-14 md:w-16 md:h-16 rounded-xl transition-all",
+              view === "private" ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30" : "text-neutral-500 hover:text-white hover:bg-white/5"
             )}
           >
-            <RiUserHeartLine size={14} />
-            Private
+            <RiUserHeartLine size={20} />
+            <span className="text-[7px] font-black uppercase tracking-widest">Private</span>
           </button>
+          <div className="w-8 h-[1px] bg-white/5" />
           <button
             onClick={() => setView("public")}
+            title="Observe Public Grid"
             className={twMerge(
-              "flex items-center gap-x-2 px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all",
-              view === "public" ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30" : "text-neutral-500 hover:text-white"
+              "flex flex-col items-center justify-center gap-y-2 w-14 h-14 md:w-16 md:h-16 rounded-xl transition-all",
+              view === "public" ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/30" : "text-neutral-500 hover:text-white hover:bg-white/5"
             )}
           >
-            <RiGlobalLine size={14} />
-            Observe Public
+            <RiGlobalLine size={20} />
+            <span className="text-[7px] font-black uppercase tracking-widest text-center leading-tight">Public</span>
           </button>
         </div>
       )}

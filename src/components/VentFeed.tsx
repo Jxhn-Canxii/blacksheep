@@ -13,6 +13,16 @@ import { twMerge } from "tailwind-merge";
 import { supabaseFetcher } from "@/libs/fetcher";
 import { getEmotionColor } from "@/libs/emotionColors";
 
+// Utility to format numbers FB style (1.5k, 1.2m)
+const formatNeuralCount = (num: number) => {
+  if (!num || num <= 0) return null;
+  if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return num.toString();
+};
+
+const isVerifiedPlanEnabled = process.env.NEXT_PUBLIC_ENABLE_VERIFIED_PLAN === 'true';
+
 const REACTION_TYPES = [
   { type: 'like', emoji: '👍', label: 'Resonate' },
   { type: 'love', emoji: '❤️', label: 'Love' },
@@ -218,8 +228,6 @@ const VentCard = memo(({
   const [isSharing, setIsSharing] = useState(false);
   const [replies, setReplies] = useState<any[]>([]);
   const [loadingReplies, setLoadingReplies] = useState(false);
-
-  const isVerifiedPlanEnabled = process.env.NEXT_PUBLIC_ENABLE_VERIFIED_PLAN === 'true';
 
   const anonymousName = vent.user_id ? `Anonymous-${vent.user_id.slice(-4)}` : "Anonymous-0000";
   // Strict identity logic: 
@@ -492,7 +500,7 @@ const VentCard = memo(({
                            <div className="flex items-center gap-x-1.5">
                                <p className="text-[8px] font-black uppercase tracking-widest text-neutral-600">Resonance</p>
                                {totalReactions > 0 && (
-                                   <span className="text-[9px] font-black text-emerald-500/80">{totalReactions}</span>
+                                   <span className="text-[9px] font-black text-emerald-500/80">{formatNeuralCount(totalReactions)}</span>
                                )}
                            </div>
                            <div className="flex items-center gap-x-1 mt-0.5">
@@ -549,7 +557,14 @@ const VentCard = memo(({
                           )}
                         >
                           <HiChatBubbleOvalLeftEllipsis size={14} className={isExpanded ? "text-emerald-500" : ""} />
-                          <span>Reply</span>
+                          <div className="flex items-center gap-x-1.5">
+                            <span>{isExpanded ? "Close" : "Reply"}</span>
+                            {!isExpanded && vent.reply_count?.[0]?.count > 0 && (
+                              <span className="bg-emerald-500/20 text-emerald-500 px-1.5 py-0.5 rounded-md border border-emerald-500/10">
+                                {formatNeuralCount(vent.reply_count[0].count)}
+                              </span>
+                            )}
+                          </div>
                         </button>
 
                         {/* DM Button - Only for friends */}
@@ -930,7 +945,8 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
             follower_count:follows!following_id(count)
           ),
           vent_reactions (id, user_id, type),
-          pulse_shares (id, user_id)
+          pulse_shares (id, user_id),
+          reply_count:replies(count)
         `);
 
       if (view === "Following" && user) {

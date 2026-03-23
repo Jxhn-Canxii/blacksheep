@@ -97,7 +97,6 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
           id, 
           content, 
           emotion, 
-          intensity,
           location, 
           created_at, 
           user_id,
@@ -110,11 +109,20 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
           const latBuffer = (bounds.ne.lat - bounds.sw.lat) * 0.1;
           const lngBuffer = (bounds.ne.lng - bounds.sw.lng) * 0.1;
 
-          query = query
-            .filter('location->latitude', 'gte', bounds.sw.lat - latBuffer)
-            .filter('location->latitude', 'lte', bounds.ne.lat + latBuffer)
-            .filter('location->longitude', 'gte', bounds.sw.lng - lngBuffer)
-            .filter('location->longitude', 'lte', bounds.ne.lng + lngBuffer);
+          const minLat = bounds.sw.lat - latBuffer;
+          const maxLat = bounds.ne.lat + latBuffer;
+          const minLng = bounds.sw.lng - lngBuffer;
+          const maxLng = bounds.ne.lng + lngBuffer;
+
+          // Ensure we have valid numbers before filtering
+          if (!isNaN(minLat) && !isNaN(maxLat) && !isNaN(minLng) && !isNaN(maxLng)) {
+            // Use .filter with string values to avoid potential serialization issues in some PostgREST versions
+            query = query
+              .filter('location->latitude', 'gte', minLat.toString())
+              .filter('location->latitude', 'lte', maxLat.toString())
+              .filter('location->longitude', 'gte', minLng.toString())
+              .filter('location->longitude', 'lte', maxLng.toString());
+          }
       }
 
       query = query.limit(300);
@@ -125,8 +133,46 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
         query = query.in('user_id', [user.id, ...followingIds]);
       }
       
-      const { data, error } = await query;
-      if (error) throw error;
+      let { data, error } = await query;
+      
+      // Fallback: If filtered query fails (common with JSON range queries in some Supabase versions),
+      // fetch all vents with locations and filter on client side.
+      if (error && bounds) {
+        console.warn("Server-side JSON filtering failed, falling back to client-side filtering.", error);
+        const { data: allVents, error: fallbackError } = await (supabase as any)
+          .from('vents')
+          .select(`
+            id, content, emotion, location, created_at, user_id,
+            profiles (username)
+          `)
+          .not('location', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(500);
+        
+        if (fallbackError) throw fallbackError;
+        
+        const filtered = (allVents || []).filter((v: any) => {
+          try {
+            const loc = typeof v.location === 'string' ? JSON.parse(v.location) : v.location;
+            const lat = loc.latitude ?? loc.lat;
+            const lng = loc.longitude ?? loc.lng;
+            if (lat === undefined || lng === undefined) return false;
+            
+            const latBuffer = (bounds.ne.lat - bounds.sw.lat) * 0.1;
+            const lngBuffer = (bounds.ne.lng - bounds.sw.lng) * 0.1;
+            
+            return lat >= (bounds.sw.lat - latBuffer) && 
+                   lat <= (bounds.ne.lat + latBuffer) && 
+                   lng >= (bounds.sw.lng - lngBuffer) && 
+                   lng <= (bounds.ne.lng + lngBuffer);
+          } catch (e) { return false; }
+        });
+        
+        data = filtered;
+      } else if (error) {
+        throw error;
+      }
+
       return (data || []).map((v: any) => ({ ...v, followerCount: 0 }));
     },
     { revalidateOnFocus: false, dedupingInterval: 10000 }
@@ -312,7 +358,7 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
             <Marker 
               key={vent.id} 
               position={[lat, lng]}
-              icon={createBubbleIcon(vent.emotion || 'Bubble', replyCount, vent.intensity)}
+              icon={createBubbleIcon(vent.emotion || 'Bubble', replyCount, (vent as any).intensity)}
             >
               <Popup className="premium-popup">
                 <div className="p-6 bg-neutral-900 border border-white/5 text-white rounded-[2.5rem] min-w-[280px] shadow-3xl space-y-6 relative overflow-hidden">
@@ -408,21 +454,8 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
         })}
       </MapContainer>
 
-      {/* UX overlay (map controls + status) */}
+      {/* UX overlay (map status) */}
       <div className="absolute top-8 right-8 z-[2000] pointer-events-none flex flex-col items-end gap-y-3">
-        <button
-          type="button"
-          aria-label="Locate me"
-          disabled={geoStatus === "loading"}
-          onClick={handleLocateMe}
-          className="pointer-events-auto bg-neutral-900/60 backdrop-blur-3xl p-4 rounded-[2rem] border border-white/10 shadow-3xl text-white hover:border-emerald-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <div className="flex items-center gap-x-2">
-            <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            <span className="text-[10px] font-black uppercase tracking-widest">Locate me</span>
-          </div>
-        </button>
-
         {loading && (
           <div className="pointer-events-auto bg-neutral-900/60 backdrop-blur-3xl p-4 rounded-[2rem] border border-white/10 shadow-3xl">
             <div className="flex items-center gap-x-3">
@@ -439,6 +472,22 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
             </p>
           </div>
         )}
+      </div>
+
+      {/* Locate Me Button - Bottom Right */}
+      <div className="absolute bottom-10 right-10 z-[2000] pointer-events-none">
+        <button
+          type="button"
+          aria-label="Locate me"
+          disabled={geoStatus === "loading"}
+          onClick={handleLocateMe}
+          className="pointer-events-auto bg-neutral-900/60 backdrop-blur-3xl p-4 rounded-[2rem] border border-white/10 shadow-3xl text-white hover:border-emerald-500/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+        >
+          <div className="flex items-center gap-x-2">
+            <span className="w-2 h-2 bg-emerald-500 rounded-full group-hover:animate-ping" />
+            <span className="text-[10px] font-black uppercase tracking-widest">Locate me</span>
+          </div>
+        </button>
       </div>
 
       {/* Map Interactive Overlays */}
