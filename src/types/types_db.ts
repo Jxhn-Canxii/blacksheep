@@ -233,6 +233,38 @@ export interface Database {
           type?: string;
         };
       };
+      notifications: {
+        Row: {
+          id: string;
+          user_id: string;
+          actor_id: string;
+          type: string;
+          entity_id: string;
+          is_read: boolean;
+          created_at: string;
+          metadata: string;
+        };
+        Insert: {
+          id: string;
+          user_id: string;
+          actor_id: string;
+          type: string;
+          entity_id: string;
+          is_read: boolean;
+          created_at: string;
+          metadata: string;
+        };
+        Update: {
+          id: string;
+          user_id: string;
+          actor_id: string;
+          type: string;
+          entity_id: string;
+          is_read: boolean;
+          created_at: string;
+          metadata: string;
+        };
+      };
     };
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };

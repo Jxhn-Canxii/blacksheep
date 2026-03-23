@@ -29,3 +29,19 @@ export interface Vent {
     username: string;
   } | null;
 }
+
+  export interface Notification{
+        id: string;
+        user_id: string;
+        is_read: boolean;
+        type: 'reply' | 'follow' | 'mention' | 'message' | 'group_info' | string;
+        created_at: string;
+        metadata?: {
+            name?: string;
+            cluster_id?: string;
+        } | null;
+        actor?: {
+            username?: string;
+            avatar_url?: string;
+        } | null;
+    };
