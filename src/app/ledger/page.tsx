@@ -30,6 +30,7 @@ export default function EmotionalLedgerPage() {
 
   const isVerifiedPlanEnabled = process.env.NEXT_PUBLIC_ENABLE_VERIFIED_PLAN === 'true';
 
+  
   // SWR Fetchers
   const { data: ledger = [], mutate: mutateLedger, isLoading: loadingLedger } = useSWR(
     user ? `ledger-${user.id}` : null,
@@ -96,49 +97,17 @@ export default function EmotionalLedgerPage() {
     };
   }, [user, supabase, mutateLedger, mutateVents]);
 
-  const handleToggleBadge = async () => {
-    if (!user || !userDetails) return;
-    const newValue = !userDetails.show_verified_badge;
-    
-    const { error } = await supabase
-      .from('profiles')
-      .update({ show_verified_badge: newValue })
-      .eq('id', user.id);
-    
-    if (!error) {
-      // refreshProfile is available in useUser
-      window.location.reload(); // Simple way to refresh for now
-    }
-  };
-
-  const handleCheckout = async () => {
-    try {
-      setIsProcessing(true);
-      const response = await fetch('/api/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId: 'price_verified_neural_link' }) // In production, use your real Stripe Price ID
-      });
-      
-      const { url } = await response.json();
-      if (url) window.location.href = url;
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const combinedHistory = useMemo(() => {
     const combined = [
-      ...ledger.map(item => ({ ...item, type: 'ledger' })),
-      ...vents.map(item => ({ ...item, type: 'vent' }))
+      ...ledger.map(item => ({ ...(item as any), type: 'ledger' })),
+      ...vents.map(item => ({ ...(item as any), type: 'vent' }))
     ];
     return combined.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }, [ledger, vents]);
 
   const stats = useMemo(() => {
-    const allEmotions = [...ledger, ...vents].map(item => item.emotion);
+    const allEmotions = [...(ledger as any[]), ...(vents as any[])].map(item => item.emotion);
     const counts: Record<string, number> = {};
     allEmotions.forEach(emotion => {
       if (emotion) counts[emotion] = (counts[emotion] || 0) + 1;
@@ -255,41 +224,6 @@ export default function EmotionalLedgerPage() {
                   </p>
                 </div>
               </div>
-
-              {userDetails?.is_verified ? (
-                <div className="flex items-center gap-x-4">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-neutral-500">
-                    Badge Visibility
-                  </span>
-                  <button
-                    onClick={handleToggleBadge}
-                    className={twMerge(
-                      "w-12 h-6 rounded-full relative transition-all duration-300",
-                      userDetails.show_verified_badge !== false ? "bg-emerald-500" : "bg-neutral-700"
-                    )}
-                  >
-                    <motion.div
-                      animate={{ x: userDetails.show_verified_badge !== false ? 26 : 4 }}
-                      className="absolute top-1 w-4 h-4 bg-white rounded-full shadow-lg"
-                    />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={handleCheckout}
-                  disabled={isProcessing}
-                  className="bg-white text-black px-8 py-4 rounded-2xl text-xs font-black italic uppercase tracking-widest hover:scale-105 active:scale-95 transition-all shadow-xl disabled:opacity-50 disabled:scale-100 flex items-center gap-x-3"
-                >
-                  {isProcessing ? (
-                    <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
-                  ) : (
-                    <>
-                      <RiSecurePaymentLine size={16} />
-                      Get Verified — $9.99/mo
-                    </>
-                  )}
-                </button>
-              )}
             </div>
           </div>
         )}
