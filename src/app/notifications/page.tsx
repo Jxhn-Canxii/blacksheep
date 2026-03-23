@@ -10,9 +10,26 @@ import { motion, AnimatePresence } from "framer-motion";
 import { twMerge } from "tailwind-merge";
 import { toast } from "react-hot-toast";
 
+type Notifications = {
+    id: string;
+    user_id: string;
+    is_read: boolean;
+    type: 'reply' | 'follow' | 'mention' | 'message' | 'group_info' | string;
+    created_at: string;
+    metadata?: {
+        name?: string;
+        cluster_id?: string;
+    } | null;
+    actor?: {
+        username?: string;
+        avatar_url?: string;
+    } | null;
+};
+
 const NotificationsPage = () => {
     const { supabase } = useSupabase();
     const { user } = useUser();
+<<<<<<< HEAD
     interface Notification {
         id: string;
         type: string;
@@ -32,7 +49,12 @@ const NotificationsPage = () => {
     }
 
     const [notifications, setNotifications] = useState<Notification[]>([]);
+=======
+
+    const [notifications, setNotifications] = useState<Notifications[]>([]);
+>>>>>>> f4e00dceb922962322fc465abc0d2c2f6fb30374
     const [loading, setLoading] = useState(true);
+
 
     const fetchNotifications = async () => {
         if (!user) return;
@@ -55,28 +77,39 @@ const NotificationsPage = () => {
         fetchNotifications();
     }, [user]);
 
-    useEffect(() => {
-        if (notifications.some(n => !n.is_read)) {
-            const timer = setTimeout(() => {
-                markAllAsRead();
-            }, 3000);
-            return () => clearTimeout(timer);
-        }
-    }, [notifications]);
+    // useEffect(() => {
+    //     if (notifications.some(n => !n.is_read)) {
+    //         const timer = setTimeout(() => {
+    //             markAllAsRead();
+    //         }, 3000);
+    //         return () => clearTimeout(timer);
+    //     }
+    // }, [notifications]);
 
+<<<<<<< HEAD
     const markAllAsRead = async () => {
         if (!user) return;
         const { error } = await (supabase
             .from('notifications') as any)
             .update({ is_read: true } as any)
             .eq('user_id', user.id);
+=======
+// const markAllAsRead = async () => {
+//     if (!user) return;
+>>>>>>> f4e00dceb922962322fc465abc0d2c2f6fb30374
 
-        if (!error) {
-            setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-            toast.success("All signals normalized.");
-        }
-    };
+//     const { error } = await supabase
+//         .from('notifications')
+//         .update({ is_read: true })
+//         .eq('user_id', user.id);
 
+//     if (!error) {
+//         setNotifications(prev =>
+//             prev.map(n => ({ ...n, is_read: true }))
+//         );
+//         toast.success("All signals normalized.");
+//     }
+// };
     const getIcon = (type: string) => {
         switch (type) {
             case 'reply': return <RiChatFollowUpLine size={24} className="text-emerald-500" />;
@@ -113,7 +146,7 @@ const NotificationsPage = () => {
                         <p className="text-neutral-500 text-sm font-medium opacity-80 max-w-md">Your history of neural links and community resonance.</p>
                     </div>
 
-                    {notifications.some(n => !n.is_read) && (
+                    {/* {notifications.some(n => !n.is_read) && (
                         <button
                             onClick={markAllAsRead}
                             className="flex items-center gap-x-3 px-6 py-3 bg-emerald-500 text-black rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-emerald-400 transition-all shadow-xl active:scale-95"
@@ -121,7 +154,7 @@ const NotificationsPage = () => {
                             <RiCheckDoubleLine size={18} />
                             <span>Clear Frequencies</span>
                         </button>
-                    )}
+                    )} */}
                 </div>
             </Header>
 
@@ -158,16 +191,16 @@ const NotificationsPage = () => {
                                                 <div className="text-white text-sm font-bold leading-snug">
                                                     {n.type === 'group_info' ? (
                                                         <span>
-                                                            Circle Established: <b className="text-emerald-500">{n.metadata?.name}</b>. 
+                                                            Circle Established: <b className="text-emerald-500">{n.metadata?.name}</b>.
                                                             Neural ID: <span className="bg-emerald-500/10 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-mono select-all ml-1">{n.metadata?.cluster_id}</span>
                                                         </span>
                                                     ) : (
                                                         <span>
                                                             <b className="text-emerald-500">@{n.actor?.username}</b> {
                                                                 n.type === 'reply' ? 'resonated with your bubble' :
-                                                                n.type === 'follow' ? 'is syncing with your frequency' :
-                                                                n.type === 'mention' ? 'called your signal in a thread' :
-                                                                n.type === 'message' ? 'initiated a direct link' : 'interacted with your signal'
+                                                                    n.type === 'follow' ? 'is syncing with your frequency' :
+                                                                        n.type === 'mention' ? 'called your signal in a thread' :
+                                                                            n.type === 'message' ? 'initiated a direct link' : 'interacted with your signal'
                                                             }
                                                         </span>
                                                     )}
@@ -179,9 +212,9 @@ const NotificationsPage = () => {
                                         </div>
 
                                         <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                                             <button className="text-[9px] font-black uppercase text-emerald-500/50 hover:text-emerald-500 tracking-tighter transition-colors">
-                                                 Details
-                                             </button>
+                                            <button className="text-[9px] font-black uppercase text-emerald-500/50 hover:text-emerald-500 tracking-tighter transition-colors">
+                                                Details
+                                            </button>
                                         </div>
                                     </div>
                                 </motion.div>

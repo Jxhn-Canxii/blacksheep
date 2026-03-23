@@ -2,6 +2,7 @@ import ProfileClient from "./ProfileClient";
 import { createClient } from "@/libs/supabaseServer";
 import { Metadata } from "next";
 
+<<<<<<< HEAD
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
   const { id } = await params;
   const supabase = await createClient();
@@ -13,6 +14,8 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   };
 }
 
+=======
+>>>>>>> f4e00dceb922962322fc465abc0d2c2f6fb30374
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   return <ProfileClient profileId={id} />;

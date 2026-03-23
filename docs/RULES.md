@@ -27,3 +27,6 @@ This document outlines the mandatory rules and standards for all contributions t
 1. **Image Optimization**: Always use the Next.js `<Image />` component for external images.
 2. **Caching**: Use SWR for client-side caching and Next.js `unstable_cache` for server-side expensive queries.
 3. **Bundle Size**: Monitor third-party library usage to keep the client bundle lean.
+
+
+supabase gen types typescript --project-id uhifzkicgxczazecqeox > types/supabase.ts
