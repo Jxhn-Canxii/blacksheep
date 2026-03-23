@@ -51,17 +51,22 @@ const Header: React.FC<HeaderProps> = ({ children, className }) => {
     if (!result.isConfirmed) return;
 
     setIsLoggingOut(true);
-    const { error } = await supabase.auth.signOut();
     
-    if (error) {
-      toast.error(error.message);
-      setIsLoggingOut(false);
-    } else {
-      toast.success('Neural link terminated safely.');
-      router.push('/');
-      router.refresh();
-      // Ensure the server re-evaluates the layout and page
-      window.location.reload();
+    try {
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        toast.error(error.message);
+        setIsLoggingOut(false);
+      } else {
+        toast.success('Neural link terminated safely.');
+        // Hard reload to root is the most reliable way to clear all state and server components
+        window.location.href = '/';
+      }
+    } catch (err) {
+      console.error("Logout error:", err);
+      // Even if API fails, forcefully redirect to home
+      window.location.href = '/';
     }
   }
 
