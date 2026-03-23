@@ -314,7 +314,7 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
           onBoundsChange={(bounds) => onBoundsChange(bounds)} 
         />
 
-        {vents?.map((vent, index) => {
+        {vents?.map((vent: any, index: number) => {
           // Robust location extraction for different storage formats
           const rawLoc = vent.location;
           let lat: number | undefined;
@@ -338,7 +338,7 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
           
           // Workaround for overlapping vents: add a tiny random jitter based on index
           // if we detect potential collisions (simple check: any vents sharing same coords)
-          const overlaps = vents.filter((v, i) => i !== index && 
+          const overlaps = vents.filter((v: any, i: number) => i !== index &&
             JSON.stringify(v.location) === JSON.stringify(vent.location)
           ).length;
 

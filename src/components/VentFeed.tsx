@@ -7,9 +7,10 @@ import { useSupabase } from "@/providers/SupabaseProvider";
 import { useUser } from "@/providers/UserProvider";
 import ReplyForm from "./ReplyForm";
 import { motion, AnimatePresence } from "framer-motion";
-import { RiBubbleChartLine, RiChatFollowUpFill, RiHeart2Line, RiHeart2Fill, RiUserFollowLine, RiGlobalLine, RiHandHeartLine, RiShareForwardLine, RiVerifiedBadgeFill } from "react-icons/ri";
+import { RiBubbleChartLine, RiChatFollowUpFill, RiHeart2Line, RiHeart2Fill, RiUserFollowLine, RiGlobalLine, RiHandHeartLine, RiShareForwardLine, RiVerifiedBadgeFill, RiPulseLine } from "react-icons/ri";
 import { HiChatBubbleOvalLeftEllipsis, HiSparkles, HiArrowTrendingUp, HiOutlineFaceSmile, HiOutlineChatBubbleLeftRight, HiShare } from "react-icons/hi2";
 import { twMerge } from "tailwind-merge";
+import toast from "react-hot-toast";
 import { supabaseFetcher } from "@/libs/fetcher";
 import { getEmotionColor } from "@/libs/emotionColors";
 
@@ -222,7 +223,8 @@ const VentCard = memo(({
   view,
   supabase,
   userLocation,
-  handleShare
+  handleShare,
+  mutateVents
 }: any) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
@@ -950,12 +952,12 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
         `);
 
       if (view === "Following" && user) {
-        const { data: followed } = await supabase
-          .from('follows')
+        const { data: followed } = await (supabase
+          .from('follows') as any)
           .select('following_id')
           .eq('follower_id', user.id);
         
-        const followedIds = followed?.map(f => f.following_id) || [];
+        const followedIds = followed?.map((f: any) => f.following_id) || [];
         query = query.in('user_id', [...followedIds, user.id]);
       }
 
@@ -1070,8 +1072,8 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
         mutateVents(); // Rollback on error
       }
     } else {
-      const { data, error } = await supabase
-        .from('vent_reactions')
+      const { data, error } = await (supabase
+        .from('vent_reactions') as any)
         .upsert(
           { vent_id: ventId, user_id: user.id, type },
           { onConflict: 'vent_id,user_id' }
@@ -1097,8 +1099,8 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
     const isCurrentlyFollowing = followingIds.has(targetId);
 
     if (isCurrentlyFollowing) {
-      const { error } = await supabase
-        .from('follows')
+      const { error } = await (supabase
+        .from('follows') as any)
         .delete()
         .eq('follower_id', user.id)
         .eq('following_id', targetId);
@@ -1111,9 +1113,9 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
         });
       }
     } else {
-      const { error } = await supabase
-        .from('follows')
-        .insert([{ follower_id: user.id, following_id: targetId }]);
+      const { error } = await (supabase
+        .from('follows') as any)
+        .insert([{ follower_id: user.id, following_id: targetId }] as any);
       
       if (!error) {
         setFollowingIds(prev => new Set(prev).add(targetId));
@@ -1132,9 +1134,9 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
     const shareUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/feeds?vent=${vent.id}`;
     navigator.clipboard.writeText(shareUrl);
     
-    const { error } = await supabase
-        .from('pulse_shares')
-        .insert([{ user_id: user.id, vent_id: vent.id }]);
+    const { error } = await (supabase
+        .from('pulse_shares') as any)
+        .insert([{ user_id: user.id, vent_id: vent.id }] as any);
 
     if (!error) {
         toast.success("Signal synchronized to your profile!");
@@ -1154,7 +1156,7 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
           .map((v: any) => v.emotion)
           .filter((e: any) => typeof e === "string" && e.trim().length > 0)
       )
-    ).slice(0, 6);
+    ).slice(0, 6) as string[];
   }, [vents]);
 
   const sortedVents = useMemo(() => {
@@ -1213,15 +1215,15 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
       if (!user) return;
       
       const [following, followers] = await Promise.all([
-        supabase.from('follows').select('following_id').eq('follower_id', user.id),
-        supabase.from('follows').select('follower_id').eq('following_id', user.id)
+        (supabase.from('follows') as any).select('following_id').eq('follower_id', user.id),
+        (supabase.from('follows') as any).select('follower_id').eq('following_id', user.id)
       ]);
 
       if (!following.error && following.data) {
-        setFollowingIds(new Set(following.data.map(f => f.following_id)));
+        setFollowingIds(new Set(following.data.map((f: any) => f.following_id)));
       }
       if (!followers.error && followers.data) {
-        setFollowerIds(new Set(followers.data.map(f => f.follower_id)));
+        setFollowerIds(new Set(followers.data.map((f: any) => f.follower_id)));
       }
     };
     
@@ -1337,7 +1339,7 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
       </div>
 
       <AnimatePresence mode="popLayout">
-        {filteredVents.map((vent, index) => (
+        {filteredVents.map((vent: any, index: number) => (
           <VentCard
             key={vent.id}
             vent={vent}
@@ -1354,6 +1356,7 @@ const VentFeed = ({ initialData }: { initialData?: any[] }) => {
             supabase={supabase}
             userLocation={userLocation}
             handleShare={handleShare}
+            mutateVents={mutateVents}
           />
         ))}
       </AnimatePresence>

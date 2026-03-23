@@ -13,13 +13,31 @@ import { toast } from "react-hot-toast";
 const NotificationsPage = () => {
     const { supabase } = useSupabase();
     const { user } = useUser();
-    const [notifications, setNotifications] = useState<any[]>([]);
+    interface Notification {
+        id: string;
+        type: string;
+        is_read: boolean;
+        created_at: string;
+        user_id: string;
+        actor_id: string | null;
+        metadata?: {
+            name?: string;
+            cluster_id?: string;
+            [key: string]: any;
+        } | null;
+        actor?: {
+            username: string;
+            avatar_url: string;
+        } | null;
+    }
+
+    const [notifications, setNotifications] = useState<Notification[]>([]);
     const [loading, setLoading] = useState(true);
 
     const fetchNotifications = async () => {
         if (!user) return;
-        const { data, error } = await supabase
-            .from('notifications')
+        const { data, error } = await (supabase
+            .from('notifications') as any)
             .select(`
                 *,
                 actor:actor_id (username, avatar_url)
@@ -28,7 +46,7 @@ const NotificationsPage = () => {
             .order('created_at', { ascending: false });
 
         if (!error && data) {
-            setNotifications(data);
+            setNotifications(data as Notification[]);
         }
         setLoading(false);
     };
@@ -48,9 +66,9 @@ const NotificationsPage = () => {
 
     const markAllAsRead = async () => {
         if (!user) return;
-        const { error } = await supabase
-            .from('notifications')
-            .update({ is_read: true })
+        const { error } = await (supabase
+            .from('notifications') as any)
+            .update({ is_read: true } as any)
             .eq('user_id', user.id);
 
         if (!error) {

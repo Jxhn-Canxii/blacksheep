@@ -34,8 +34,8 @@ export default function EmotionalLedgerPage() {
   const { data: ledger = [], mutate: mutateLedger, isLoading: loadingLedger } = useSWR(
     user ? `ledger-${user.id}` : null,
     async () => {
-      const { data, error } = await supabase
-        .from('emotional_ledger')
+      const { data, error } = await (supabase
+        .from('emotional_ledger') as any)
         .select('*')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false });
@@ -43,20 +43,20 @@ export default function EmotionalLedgerPage() {
         toast.error("Unable to access emotional ledger.");
         throw error;
       }
-      return data || [];
+      return (data as any[]) || [];
     }
   );
 
   const { data: vents = [], mutate: mutateVents, isLoading: loadingVents } = useSWR(
     user ? `vents-${user.id}` : null,
     async () => {
-      const { data, error } = await supabase
-        .from('vents')
+      const { data, error } = await (supabase
+        .from('vents') as any)
         .select('*')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false });
       if (error) throw error;
-      return data || [];
+      return (data as any[]) || [];
     }
   );
 
@@ -100,9 +100,9 @@ export default function EmotionalLedgerPage() {
     if (!user || !userDetails) return;
     const newValue = !userDetails.show_verified_badge;
     
-    const { error } = await supabase
-      .from('profiles')
-      .update({ show_verified_badge: newValue })
+    const { error } = await (supabase
+      .from('profiles') as any)
+      .update({ show_verified_badge: newValue } as any)
       .eq('id', user.id);
     
     if (!error) {

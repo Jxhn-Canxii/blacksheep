@@ -35,13 +35,13 @@ export default function ProfilesPage() {
     if (!currentUser) return;
     
     const fetchFollowing = async () => {
-      const { data } = await supabase
-        .from("follows")
+      const { data } = await (supabase
+        .from("follows") as any)
         .select("following_id")
         .eq("follower_id", currentUser.id);
       
       if (data) {
-        setFollowingIds(data.map(f => f.following_id));
+        setFollowingIds(data.map((f: any) => f.following_id));
       }
     };
     
@@ -59,8 +59,8 @@ export default function ProfilesPage() {
     const isFollowing = followingIds.includes(profileId);
     
     if (isFollowing) {
-        const { error } = await supabase
-          .from("follows")
+        const { error } = await (supabase
+          .from("follows") as any)
           .delete()
           .eq("follower_id", currentUser.id)
           .eq("following_id", profileId);
@@ -75,9 +75,9 @@ export default function ProfilesPage() {
           setProfiles(prev => prev.map(updateFn));
         }
     } else {
-        const { error } = await supabase
-          .from("follows")
-          .insert({ follower_id: currentUser.id, following_id: profileId });
+        const { error } = await (supabase
+          .from("follows") as any)
+          .insert({ follower_id: currentUser.id, following_id: profileId } as any);
           
         if (!error) {
           setFollowingIds(prev => [...prev, profileId]);
@@ -110,12 +110,12 @@ export default function ProfilesPage() {
       // Also fetch who we are already following to filter them out of recommendations
       let followingData: string[] = [];
       if (currentUser?.id) {
-        const { data: fData } = await supabase.from('follows').select('following_id').eq('follower_id', currentUser.id);
-        if (fData) followingData = fData.map(f => f.following_id);
+        const { data: fData } = await (supabase.from('follows') as any).select('following_id').eq('follower_id', currentUser.id);
+        if (fData) followingData = fData.map((f: any) => f.following_id);
       }
 
-      let query = supabase
-        .from("profiles")
+      let query = (supabase
+        .from("profiles") as any)
         .select(`
           id, 
           username, 
@@ -134,7 +134,7 @@ export default function ProfilesPage() {
       
       if (!error && data) {
         const filtered = data
-            .filter(p => p.id !== currentUser?.id && !followingData.includes(p.id))
+            .filter((p: any) => p.id !== currentUser?.id && !followingData.includes(p.id))
             .slice(0, 6);
         setRecommended(formatProfileData(filtered));
       }
@@ -153,8 +153,8 @@ export default function ProfilesPage() {
 
     const fetchProfiles = async () => {
       setLoading(true);
-      let query = supabase
-        .from("profiles")
+      let query = (supabase
+        .from("profiles") as any)
         .select(`
           id, 
           username, 

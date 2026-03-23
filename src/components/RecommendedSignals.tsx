@@ -85,14 +85,14 @@ const RecommendedSignals = () => {
     const isFollowing = followingIds.includes(profileId);
     
     if (isFollowing) {
-      const { error } = await supabase.from("follows").delete().eq("follower_id", currentUser.id).eq("following_id", profileId);
+      const { error } = await (supabase.from("follows") as any).delete().eq("follower_id", currentUser.id).eq("following_id", profileId);
       if (!error) {
         setFollowingIds(prev => prev.filter(id => id !== profileId));
         setRecommended(prev => prev.map(p => p.id === profileId ? { ...p, followers_count: Math.max(0, p.followers_count - 1)} : p));
         toast.success("Unlinked signal.");
       }
     } else {
-      const { error } = await supabase.from("follows").insert({ follower_id: currentUser.id, following_id: profileId });
+      const { error } = await (supabase.from("follows") as any).insert({ follower_id: currentUser.id, following_id: profileId } as any);
       if (!error) {
         setFollowingIds(prev => [...prev, profileId],);
         setRecommended(prev => prev.map(p => p.id === profileId ? { ...p, followers_count: p.followers_count + 1} : p));

@@ -39,11 +39,11 @@ const SearchPage = () => {
         const fetchFollowData = async () => {
             if (!user) return;
             const [following, followers] = await Promise.all([
-                supabase.from('follows').select('following_id').eq('follower_id', user.id),
-                supabase.from('follows').select('follower_id').eq('following_id', user.id)
+                (supabase.from('follows') as any).select('following_id').eq('follower_id', user.id),
+                (supabase.from('follows') as any).select('follower_id').eq('following_id', user.id)
             ]);
-            if (!following.error && following.data) setFollowingIds(following.data.map(f => f.following_id));
-            if (!followers.error && followers.data) setFollowerIds(followers.data.map(f => f.follower_id));
+            if (!following.error && following.data) setFollowingIds(following.data.map((f: any) => f.following_id));
+            if (!followers.error && followers.data) setFollowerIds(followers.data.map((f: any) => f.follower_id));
         };
         fetchFollowData();
     }, [user, supabase]);
@@ -55,10 +55,10 @@ const SearchPage = () => {
         }
         const isCurrentlyFollowing = followingIds.includes(targetId);
         if (isCurrentlyFollowing) {
-            const { error } = await supabase.from('follows').delete().eq('follower_id', user.id).eq('following_id', targetId);
+            const { error } = await (supabase.from('follows') as any).delete().eq('follower_id', user.id).eq('following_id', targetId);
             if (!error) setFollowingIds(prev => prev.filter(id => id !== targetId));
         } else {
-            const { error } = await supabase.from('follows').insert([{ follower_id: user.id, following_id: targetId }]);
+            const { error } = await (supabase.from('follows') as any).insert([{ follower_id: user.id, following_id: targetId }] as any);
             if (!error) setFollowingIds(prev => [...prev, targetId]);
         }
     };

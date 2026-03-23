@@ -34,13 +34,13 @@ export async function POST(req: Request) {
           const user_id = session.metadata.supabaseUUID;
           const subscription_id = session.subscription;
 
-          await supabase
-            .from('profiles')
+          await (supabase
+            .from('profiles') as any)
             .update({ 
               is_verified: true, 
               plan_type: 'premium',
               stripe_subscription_id: subscription_id 
-            })
+            } as any)
             .eq('id', user_id);
           break;
         }
@@ -48,13 +48,13 @@ export async function POST(req: Request) {
           const subscription = event.data.object as any;
           const user_id = subscription.metadata.supabaseUUID;
 
-          await supabase
-            .from('profiles')
+          await (supabase
+            .from('profiles') as any)
             .update({ 
               is_verified: false, 
               plan_type: 'free',
               stripe_subscription_id: null 
-            })
+            } as any)
             .eq('id', user_id);
           break;
         }

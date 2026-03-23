@@ -22,19 +22,37 @@ const formatTimeAgo = (date: Date) => {
   return date.toLocaleDateString();
 };
 
+interface Notification {
+  id: string;
+  type: string;
+  is_read: boolean;
+  created_at: string;
+  user_id: string;
+  actor_id: string | null;
+  metadata?: {
+  name?: string;
+  cluster_id?: string;
+  [key: string]: any;
+  } | null;
+  actor?: {
+  username: string;
+  avatar_url: string;
+  } | null;
+}
+
 const Notifications = () => {
   const { supabase } = useSupabase();
   const { user } = useUser();
-  const [notifications, setNotifications] = useState<any[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const markAsRead = async (id: string) => {
-    const { error } = await supabase
-      .from('notifications')
-      .update({ is_read: true })
+    const { error } = await (supabase
+      .from('notifications') as any)
+      .update({ is_read: true } as any)
       .eq('id', id);
 
     if (!error) {
@@ -57,8 +75,8 @@ const Notifications = () => {
     if (!user) return;
 
     const fetchNotifications = async () => {
-      const { data, error } = await supabase
-        .from('notifications')
+      const { data, error } = await (supabase
+        .from('notifications') as any)
         .select(`
           *,
           actor:actor_id (username, avatar_url)
@@ -68,7 +86,7 @@ const Notifications = () => {
         .limit(20);
 
       if (!error && data) {
-        setNotifications(data);
+        setNotifications(data as Notification[]);
       }
       setLoading(false);
     };
@@ -85,7 +103,7 @@ const Notifications = () => {
           .eq('id', payload.new.actor_id)
           .single()
           .then(({ data }) => {
-            setNotifications(prev => [{ ...payload.new, actor: data }, ...prev]);
+            setNotifications(prev => [{ ...(payload.new as any), actor: data as any } as Notification, ...prev]);
           });
       })
       .subscribe();
@@ -107,7 +125,7 @@ const Notifications = () => {
     }
   };
 
-  const getMessage = (n: any) => {
+  const getMessage = (n: Notification) => {
     const actorName = n.actor?.username || 'Someone';
     switch (n.type) {
       case 'reply': return <span><b className="text-white">@{actorName}</b> resonated with your bubble.</span>;

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSupabase } from "@/providers/SupabaseProvider";
 import { useUser } from "@/providers/UserProvider";
 import { motion, AnimatePresence } from "framer-motion";
-import { HiOutlineArrowLeft, HiSparkles, HiUserGroup, HiOutlineChatBubbleBottomCenterText, HiOutlineChatBubbleOvalLeftEllipsis, HiHandHeart, HiOutlinePlusCircle } from "react-icons/hi2";
+import { HiOutlineArrowLeft, HiSparkles, HiUserGroup, HiOutlineChatBubbleBottomCenterText, HiOutlineChatBubbleOvalLeftEllipsis, HiOutlinePlusCircle } from "react-icons/hi2";
 import { RiHandHeartLine, RiShareForwardLine, RiBubbleChartFill, RiLineChartFill } from "react-icons/ri";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
@@ -141,9 +141,9 @@ export default function ProfileClient({ profileId }: { profileId: string }) {
         toast.success("Unfollowed frequency.");
       }
     } else {
-      const { error } = await supabase
-        .from('follows')
-        .insert([{ follower_id: currentUser.id, following_id: profileId }]);
+      const { error } = await (supabase
+        .from('follows') as any)
+        .insert([{ follower_id: currentUser.id, following_id: profileId }] as any);
       if (!error) {
         setIsFollowing(true);
         toast.success("Synchronized with frequency!");

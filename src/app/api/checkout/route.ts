@@ -17,8 +17,8 @@ export async function POST(req: Request) {
     }
 
     // Get profile data
-    const { data: profile } = await supabase
-      .from('profiles')
+    const { data: profile } = await (supabase
+      .from('profiles') as any)
       .select('stripe_customer_id, full_name')
       .eq('id', user.id)
       .single();
@@ -36,9 +36,9 @@ export async function POST(req: Request) {
       customerId = customer.id;
 
       // Update profile with customer ID
-      await supabase
-        .from('profiles')
-        .update({ stripe_customer_id: customerId })
+      await (supabase
+        .from('profiles') as any)
+        .update({ stripe_customer_id: customerId } as any)
         .eq('id', user.id);
     }
 
