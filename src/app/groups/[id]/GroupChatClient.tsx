@@ -45,45 +45,45 @@ const GroupMessageItem = memo(({ message, isOwn, router, isFollowing, onToggleFo
     <div className={`flex flex-col ${isOwn ? "items-end" : "items-start"} max-w-[85%] md:max-w-[75%] relative`}>
       <div
         className={`
-                      relative p-3 px-4 rounded-xl text-[13px] leading-relaxed tracking-tight group
-                      ${
-                        isOwn
-                          ? "bg-emerald-500 text-black rounded-br-none shadow-md shadow-emerald-500/10"
-                          : "bg-neutral-900/60 text-neutral-100 border border-white/5 rounded-bl-none shadow-sm hover:border-emerald-500/20 transition-all duration-500"
-                      }
-                  `}
+          relative p-3 px-4 rounded-xl text-[13px] leading-relaxed tracking-tight group
+          ${
+            isOwn
+              ? "bg-emerald-500 text-black rounded-br-none shadow-md shadow-emerald-500/10"
+              : "bg-neutral-900/60 text-neutral-100 border border-white/5 rounded-bl-none shadow-sm hover:border-emerald-500/20 transition-all duration-500"
+          }
+        `}
       >
-          <div className="flex items-center gap-x-2 mb-1">
-            <button 
-              onClick={() => router.push(`/profiles/${message.user_id}`)}
-              className={`text-[8px] font-black uppercase tracking-[0.1em] whitespace-nowrap truncate hover:underline transition-all ${isOwn ? "text-black/60" : "text-emerald-500/80"}`}
+        <div className="flex items-center gap-x-2 mb-1">
+          <button 
+            onClick={() => router.push(`/profiles/${message.user_id}`)}
+            className={`text-[8px] font-black uppercase tracking-[0.1em] whitespace-nowrap truncate hover:underline transition-all ${isOwn ? "text-black/60" : "text-emerald-500/80"}`}
+          >
+            @{message.profiles?.username || "known"}
+          </button>
+          {onToggleFollow && !isOwn && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleFollow(message.user_id);
+              }}
+              className={`text-[6px] font-black uppercase tracking-[0.15em] px-1 py-0.5 rounded border transition-all ${
+                isFollowing 
+                  ? "text-neutral-500 border-white/5 bg-white/5" 
+                  : "text-emerald-500 border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500 hover:text-black"
+              }`}
             >
-              @{message.profiles?.username || "known"}
+              {isFollowing ? 'Linked' : 'Link Signal'}
             </button>
-            {onToggleFollow && !isOwn && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleFollow(message.user_id);
-                }}
-                className={`text-[6px] font-black uppercase tracking-[0.15em] px-1 py-0.5 rounded border transition-all ${
-                  isFollowing 
-                    ? "text-neutral-500 border-white/5 bg-white/5" 
-                    : "text-emerald-500 border-emerald-500/20 bg-emerald-500/5 hover:bg-emerald-500 hover:text-black"
-                }`}
-              >
-                {isFollowing ? 'Linked' : 'Link Signal'}
-              </button>
-            )}
-            <span className={`text-[6px] font-mono italic whitespace-nowrap shrink-0 ml-auto ${isOwn ? "text-black/40" : "text-neutral-500"}`}>
-              {new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          </div>
-          <div className="relative z-10 font-medium">
-            {message.content}
-          </div>
+          )}
+          <span className={`text-[6px] font-mono italic whitespace-nowrap shrink-0 ml-auto ${isOwn ? "text-black/40" : "text-neutral-500"}`}>
+            {new Date(message.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+          </span>
+        </div>
+        <div className="relative z-10 font-medium">
+          {message.content}
         </div>
       </div>
+    </div>
 
     {isOwn && (
       <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/5 flex items-center justify-center text-neutral-600 text-[8px] font-black mb-1 italic">
@@ -94,20 +94,6 @@ const GroupMessageItem = memo(({ message, isOwn, router, isFollowing, onToggleFo
 ));
 
 GroupMessageItem.displayName = "GroupMessageItem";
-
-type GroupMessageRow = {
-  id: string;
-  created_at: string;
-  content: string;
-  user_id: string;
-  group_id?: string | null;
-  // Supabase row may include other columns (e.g. group_id). We only need these fields for UI.
-  [key: string]: unknown;
-};
-
-type RealtimeInsertPayload<TNew> = {
-  new: TNew;
-};
 
 export default function GroupChatClient({ groupId }: { groupId: string }) {
   const router = useRouter();
@@ -123,6 +109,8 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
   const [isQrOpen, setIsQrOpen] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [members, setMembers] = useState<any[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const LIMIT = 20;
@@ -157,7 +145,7 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
   );
 
   // Optimized SWR Fetching for messages
-  const { data: messages, error: messagesError, mutate: mutateMessages } = useSWR(
+  const { data: messages = [], error: messagesError, mutate: mutateMessages } = useSWR(
     [`group-messages`, groupId],
     async () => {
       const { data, error } = await (supabase as any)
@@ -180,7 +168,13 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
   const isMember = groupData?.membership?.status === 'approved';
   const membershipStatus = groupData?.membership?.status || null;
   const userRole = groupData?.membership?.role || null;
-  const members = groupData?.members || [];
+
+  // Update members when groupData changes
+  useEffect(() => {
+    if (groupData?.members) {
+      setMembers(groupData.members);
+    }
+  }, [groupData]);
 
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
 
@@ -302,7 +296,6 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
   // Defensive guard: if some navigation bug ever produces `/groups/undefined`.
   const isInvalidGroupId = !groupId || groupId === "undefined";
 
-
   // Request to join the group
   const handleRequestJoin = useCallback(async () => {
     if (!user) {
@@ -318,10 +311,9 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       toast.error("Failed to send join request.");
     } else {
       toast.success("Join request sent! Awaiting approval.");
-      setIsMember(true);
-      setMembershipStatus('pending');
+      mutateGroup(); // Refresh group data
     }
-  }, [user, supabase, groupId]);
+  }, [user, supabase, groupId, mutateGroup]);
 
   // Approve a member (Admin/Moderator only)
   const approveMember = useCallback(async (targetUserId: string) => {
@@ -330,30 +322,20 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       return;
     }
 
-    const { data, error } = await (supabase as any)
+    const { error } = await (supabase as any)
       .from("group_members")
       .update({ status: 'approved' })
       .eq("group_id", groupId)
-      .eq("user_id", targetUserId)
-      .select();
+      .eq("user_id", targetUserId);
 
     if (error) {
       toast.error("Failed to approve member.");
     } else {
       toast.success("Member approved!");
-      // Refresh member lists
-      const { data: memberData } = await (supabase as any).from("group_members")
-        .select("profiles(id, username, avatar_url), status, role")
-        .eq("group_id", groupId)
-        .eq("status", "approved");
-      
-      if (memberData) {
-        setMembers(memberData.map((m: any) => ({ ...m.profiles, role: m.role })));
-      }
-      
+      mutateGroup(); // Refresh group data
       setPendingMembers(prev => prev.filter(m => m.id !== targetUserId));
     }
-  }, [userRole, supabase, groupId]);
+  }, [userRole, supabase, groupId, mutateGroup]);
 
   // Update a member's role (Admin only)
   const updateMemberRole = useCallback(async (targetUserId: string, newRole: 'admin' | 'moderator' | 'member') => {
@@ -362,28 +344,19 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       return;
     }
 
-    const { data, error } = await (supabase as any)
+    const { error } = await (supabase as any)
       .from("group_members")
       .update({ role: newRole })
       .eq("group_id", groupId)
-      .eq("user_id", targetUserId)
-      .select();
+      .eq("user_id", targetUserId);
 
     if (error) {
       toast.error(`Failed to update role to ${newRole}.`);
     } else {
       toast.success(`User promoted to ${newRole}!`);
-      // Refresh member list
-      const { data: memberData } = await (supabase as any).from("group_members")
-        .select("profiles(id, username, avatar_url), status, role")
-        .eq("group_id", groupId)
-        .eq("status", "approved");
-      
-      if (memberData) {
-        setMembers(memberData.map((m: any) => ({ ...m.profiles, role: m.role })));
-      }
+      mutateGroup(); // Refresh group data
     }
-  }, [userRole, supabase, groupId]);
+  }, [userRole, supabase, groupId, mutateGroup]);
 
   // Remove a member (Admin/Moderator only)
   const removeMember = useCallback(async (targetUserId: string) => {
@@ -397,7 +370,7 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
         text: 'Are you sure you want to decouple this entity from the circle? This will terminate their resonance with this frequency.',
         icon: 'warning',
         showCancelButton: true,
-        confirmButtonColor: '#ef4444', // red-500
+        confirmButtonColor: '#ef4444',
         cancelButtonColor: '#3f3f46',
         confirmButtonText: 'Sever Link',
         cancelButtonText: 'Maintain Connection',
@@ -423,9 +396,9 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       toast.error("Failed to remove member.");
     } else {
       toast.success("Member removed from circle.");
-      setMembers(prev => prev.filter(m => m.id !== targetUserId));
+      mutateGroup(); // Refresh group data
     }
-  }, [userRole, supabase, groupId]);
+  }, [userRole, supabase, groupId, mutateGroup]);
 
   // Search for users to add to the group
   const handleSearch = useCallback(async (e: React.FormEvent) => {
@@ -461,11 +434,12 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
       }
     } else {
       toast.success("User added to the circle!");
+      mutateGroup(); // Refresh group data
       setIsAddMemberOpen(false);
       setSearchQuery("");
       setSearchResults([]);
     }
-  }, [supabase, groupId]);
+  }, [supabase, groupId, mutateGroup]);
 
   // Helper to scroll to bottom
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -477,68 +451,25 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
     }
   }, []);
 
+  // Handle scroll for infinite loading
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current || loadingMore) return;
+    
+    const { scrollTop } = scrollRef.current;
+    if (scrollTop === 0) {
+      // Load more messages when scrolled to top
+      setLoadingMore(true);
+      // Add logic to load more messages here
+      setTimeout(() => setLoadingMore(false), 1000);
+    }
+  }, [loadingMore]);
+
   // Scroll to bottom on initial messages load
   useEffect(() => {
     if (messages && messages.length > 0) {
       scrollToBottom("auto");
     }
   }, [messages, scrollToBottom]);
-
-  useEffect(() => {
-    fetchInitialMessages();
-
-    if (isInvalidGroupId || membershipStatus !== 'approved') return;
-
-    const channel = supabase
-      .channel(`group-chat-${groupId}`)
-      .on(
-        "postgres_changes",
-        { 
-          event: "INSERT", 
-          schema: "public", 
-          table: "messages",
-          filter: `group_id=eq.${groupId}` 
-        },
-        async (payload: RealtimeInsertPayload<GroupMessageRow>) => {
-
-          const { data: profile } = await (supabase as any)
-            .from("profiles")
-            .select("username, avatar_url")
-            .eq("id", payload.new.user_id)
-            .single();
-
-          setMessages((prev) => {
-            const filtered = prev.filter(m => 
-              !(m.user_id === payload.new.user_id && m.content === payload.new.content && m.id.length > 30)
-            );
-            
-            const updated = [
-              ...filtered,
-              {
-                id: payload.new.id,
-                created_at: payload.new.created_at,
-                content: payload.new.content,
-                user_id: payload.new.user_id,
-                profiles: profile,
-              },
-            ];
-
-            // If we are already near the bottom, scroll to the new message
-            if (scrollRef.current) {
-              const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
-              const isNearBottom = scrollHeight - scrollTop - clientHeight < 150;
-              if (isNearBottom) {
-                setTimeout(() => scrollToBottom(), 100);
-              }
-            }
-
-            return updated;
-          });
-        },
-      )
-      .subscribe();
-
-  // No longer needed, as we have SWR and real-time subscription.
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -549,7 +480,7 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
     }
 
     const now = Date.now();
-    if (now - lastSubmitTime < 1000) { // Reduced to 1 second for smoother feel
+    if (now - lastSubmitTime < 1000) {
       toast.error("Vibrating too fast. Wait a moment...");
       return;
     }
@@ -603,16 +534,21 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
     }
   };
 
-  return (
-    isInvalidGroupId ? (
+  // Return JSX
+  if (isInvalidGroupId) {
+    return (
       <div className="bg-neutral-950 rounded-[3rem] h-full w-full overflow-hidden flex flex-col border border-white/5 p-8">
         <div className="text-white font-black text-xl">Circle not found</div>
         <div className="text-neutral-500 mt-2">Invalid circle id.</div>
       </div>
-    ) : isMember === false ? (
+    );
+  }
+
+  if (isMember === false) {
+    return (
       <div className="bg-neutral-950 rounded-[3rem] h-full w-full overflow-hidden flex flex-col border border-white/5 relative items-center justify-center p-8 text-center">
         <div className="absolute top-8 left-8">
-           <button
+          <button
             onClick={() => router.back()}
             className="p-4 bg-white/5 rounded-2xl text-white hover:bg-emerald-500 hover:text-black transition-all border border-white/5"
           >
@@ -622,7 +558,7 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
         
         <div className="max-w-md space-y-8">
           <div className="w-24 h-24 bg-emerald-500/10 rounded-[2rem] border border-emerald-500/20 flex items-center justify-center mx-auto text-emerald-500">
-             <HiChatBubbleBottomCenterText size={48} className="animate-pulse" />
+            <HiChatBubbleBottomCenterText size={48} className="animate-pulse" />
           </div>
           
           <div className="space-y-4">
@@ -645,10 +581,14 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
         {/* Atmospheric background */}
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
       </div>
-    ) : membershipStatus === 'pending' ? (
+    );
+  }
+
+  if (membershipStatus === 'pending') {
+    return (
       <div className="bg-neutral-950 rounded-[3rem] h-full w-full overflow-hidden flex flex-col border border-white/5 relative items-center justify-center p-8 text-center">
         <div className="absolute top-8 left-8">
-           <button
+          <button
             onClick={() => router.back()}
             className="p-4 bg-white/5 rounded-2xl text-white hover:bg-emerald-500 hover:text-black transition-all border border-white/5"
           >
@@ -658,7 +598,7 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
         
         <div className="max-w-md space-y-8">
           <div className="w-24 h-24 bg-yellow-500/10 rounded-[2rem] border border-yellow-500/20 flex items-center justify-center mx-auto text-yellow-500">
-             <HiRocketLaunch size={48} className="animate-bounce" />
+            <HiRocketLaunch size={48} className="animate-bounce" />
           </div>
           
           <div className="space-y-4">
@@ -675,7 +615,11 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
           </div>
         </div>
       </div>
-    ) : (
+    );
+  }
+
+  // Main chat view
+  return (
     <div className="bg-neutral-950 rounded-[2rem] h-full w-full overflow-hidden flex flex-col border border-white/5 relative">
       {/* Dynamic Header */}
       <div className="bg-neutral-900/40 backdrop-blur-3xl border-b border-white/5 p-3 flex items-center justify-between z-20">
@@ -796,7 +740,7 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
             </div>
           </div>
         </div>
-    </div>
+      </div>
 
       {/* Experimental Chat Feed */}
       <div
@@ -866,9 +810,9 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
             type="submit"
             aria-label="Send circle message"
             className="
-                p-4 bg-emerald-500 hover:bg-emerald-400 text-black rounded-xl transition-all duration-500 shadow-xl shadow-emerald-500/20
-                active:scale-90
-                focus-visible:outline-none
+              p-4 bg-emerald-500 hover:bg-emerald-400 text-black rounded-xl transition-all duration-500 shadow-xl shadow-emerald-500/20
+              active:scale-90
+              focus-visible:outline-none
             "
           >
             <HiRocketLaunch size={20} />
@@ -1135,11 +1079,11 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
                   onClick={handleCopyClusterId}
                   className="w-full bg-black/40 border border-white/5 p-4 rounded-2xl flex items-center justify-between cursor-pointer hover:border-emerald-500/30 transition-all group"
                 >
-                   <div className="flex flex-col">
+                  <div className="flex flex-col">
                       <span className="text-[8px] font-black uppercase text-neutral-600 tracking-widest leading-none mb-1">Cluster ID</span>
                       <span className="text-sm font-black italic text-white uppercase tracking-tight group-hover:text-emerald-500 transition-colors truncate max-w-[180px]">{clusterId}</span>
-                   </div>
-                   <HiHashtag size={20} className="text-neutral-800 group-hover:text-emerald-500 transition-colors" />
+                  </div>
+                  <HiHashtag size={20} className="text-neutral-800 group-hover:text-emerald-500 transition-colors" />
                 </div>
                 
                 <p className="text-neutral-600 text-[9px] text-center font-medium leading-relaxed px-2">
@@ -1151,7 +1095,5 @@ export default function GroupChatClient({ groupId }: { groupId: string }) {
         )}
       </AnimatePresence>
     </div>
-    )
   );
 }
-
