@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useSupabase } from "@/providers/SupabaseProvider";
 import { useUser } from "@/providers/UserProvider";
 import { motion, AnimatePresence } from "framer-motion";
-import { HiOutlineArrowLeft, HiSparkles, HiUserGroup, HiOutlineChatBubbleBottomCenterText, HiOutlineChatBubbleOvalLeftEllipsis, HiHandHeart, HiOutlinePlusCircle } from "react-icons/hi2";
+import { HiOutlineArrowLeft, HiSparkles, HiUserGroup, HiOutlineChatBubbleBottomCenterText, HiOutlineChatBubbleOvalLeftEllipsis, HiOutlinePlusCircle } from "react-icons/hi2";
 import { RiHandHeartLine, RiShareForwardLine, RiBubbleChartFill, RiLineChartFill } from "react-icons/ri";
 import { useRouter } from "next/navigation";
 import Header from "@/components/Header";
