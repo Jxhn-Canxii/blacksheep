@@ -5,8 +5,8 @@ import { ThemeSupa } from '@supabase/auth-ui-shared';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
-import { useSupabase } from '@/providers/SupabaseProvider';
-import { useUser } from '@/providers/UserProvider';
+import { useSupabase } from "@/hooks/useSupabase";
+import { useUser } from "@/hooks/useUser";
 
 interface AuthFormProps {
   view?: "sign_in" | "sign_up";
@@ -16,12 +16,12 @@ const AuthForm: React.FC<AuthFormProps> = ({ view = "sign_in" }) => {
   const { supabase, session } = useSupabase();
   const { setIsLoggingIn } = useUser();
   const router = useRouter();
+  const redirectTo = `${typeof window !== "undefined" ? window.location.origin : ""}/`;
 
   useEffect(() => {
     if (session) {
       setIsLoggingIn(true);
       router.push('/');
-      router.refresh();
     }
   }, [session, router, setIsLoggingIn]);
 
@@ -30,6 +30,7 @@ const AuthForm: React.FC<AuthFormProps> = ({ view = "sign_in" }) => {
       supabaseClient={supabase}
       view={view}
       providers={['github', 'google', 'discord']}
+        redirectTo={redirectTo}
       magicLink={false}
       appearance={{
         theme: ThemeSupa,

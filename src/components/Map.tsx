@@ -2,14 +2,15 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import useSWR from "swr";
-import { useSupabase } from "@/providers/SupabaseProvider";
-import { useUser } from "@/providers/UserProvider";
+import { useSupabase } from "@/hooks/useSupabase";
+import { useUser } from "@/hooks/useUser";
 import { motion, AnimatePresence } from "framer-motion";
 import { HiFire, HiSparkles, HiOutlineUserCircle, HiUserCircle } from "react-icons/hi2";
 import ReplyForm from "./ReplyForm";
 import Link from "next/link";
 import { twMerge } from "tailwind-merge";
 import { getEmotionColor } from "@/libs/emotionColors";
+import { toggleFollow } from "@/services/api";
 
 // Since this component is dynamically imported with { ssr: false },
 // we can safely import Leaflet and React-Leaflet directly.
@@ -17,16 +18,64 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 
+import { Vent } from "@/interfaces/types";
+
 // Fix Leaflet default icon issues for Next.js
 if (typeof window !== 'undefined' && L.Icon) {
-    // @ts-ignore
-    delete L.Icon.Default.prototype._getIconUrl;
+    (L.Icon.Default.prototype as any)._getIconUrl = undefined;
     L.Icon.Default.mergeOptions({
       iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
       iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
       shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
     });
 }
+
+const getEmotionEmoji = (emotion: string) => {
+  switch (emotion.toLowerCase()) {
+    // Main FEELINGS (VentForm)
+    case 'anxious': return '😰';
+    case 'angry': return '🔥';
+    case 'overwhelmed': return '😵‍💫';
+    case 'sad': return '😢';
+    case 'numb': return '😶';
+    case 'restless': return '🌀';
+    case 'lonely': return '🥺';
+    case 'exhausted': return '🥱';
+    case 'stressed': return '😫';
+    case 'frustrated': return '😤';
+    case 'guilty': return '😬';
+    case 'hopeless': return '😞';
+    case 'uncertain': return '🤷';
+    case 'burnt out': return '🥵';
+    case 'tense': return '😬';
+    case 'disconnected': return '🫥';
+    case 'worried': return '😟';
+    case 'tired': return '💤';
+    case 'melancholy': return '🌧️';
+    case 'apathetic': return '😐';
+    case 'insecure': return '🙈';
+    case 'betrayed': return '😔';
+    case 'grieving': return '🥀';
+    case 'pressure': return '🧨';
+    case 'isolated': return '🏝️';
+    case 'misunderstood': return '🤨';
+    case 'suffocated': return '😮‍💨';
+    case 'lost': return '🧭';
+    case 'fragile': return '🧊';
+    case 'invisible': return '👻';
+    case 'neutral': return '🤔';
+
+    // Legacy/alternate emotions (in case old data exists)
+    case 'joy': return '😂';
+    case 'happy': return '😄';
+    case 'love': return '❤️';
+    case 'sadness': return '😢';
+    case 'anger': return '🔥';
+    case 'fear': return '😱';
+    case 'surprise': return '😮';
+    default: return '🤔';
+  }
+};
 
 /**
  * Controller to handle map centering and reactive data loading
@@ -88,10 +137,10 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
     setIsMounted(true);
   }, []);
 
-  const { data: vents, error, mutate: mutateVents } = useSWR(
+  const { data: vents, error, mutate: mutateVents } = useSWR<Vent[]>(
     [`map-vents`, view, user?.id, bounds?.sw?.lat, bounds?.sw?.lng, bounds?.ne?.lat, bounds?.ne?.lng],
     async () => {
-      let query = (supabase as any)
+      let query = supabase
         .from('vents')
         .select(`
           id, 
@@ -129,7 +178,7 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
 
       if (view === "private" && user) {
         const { data: followed } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
-        const followingIds = (followed || []).map((f: any) => f.following_id);
+        const followingIds = (followed || []).map((f: { following_id: string }) => f.following_id);
         query = query.in('user_id', [user.id, ...followingIds]);
       }
       
@@ -139,7 +188,7 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
       // fetch all vents with locations and filter on client side.
       if (error && bounds) {
         console.warn("Server-side JSON filtering failed, falling back to client-side filtering.", error);
-        const { data: allVents, error: fallbackError } = await (supabase as any)
+        const { data: allVents, error: fallbackError } = await supabase
           .from('vents')
           .select(`
             id, content, emotion, location, created_at, user_id,
@@ -151,7 +200,7 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
         
         if (fallbackError) throw fallbackError;
         
-        const filtered = (allVents || []).filter((v: any) => {
+        const filtered = (allVents || []).filter((v: Vent) => {
           try {
             const loc = typeof v.location === 'string' ? JSON.parse(v.location) : v.location;
             const lat = loc.latitude ?? loc.lat;
@@ -173,7 +222,7 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
         throw error;
       }
 
-      return (data || []).map((v: any) => ({ ...v, followerCount: 0 }));
+      return (data || []).map((v: Vent) => ({ ...v, followerCount: 0 })) as Vent[];
     },
     { revalidateOnFocus: false, dedupingInterval: 10000 }
   );
@@ -189,30 +238,11 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
   useEffect(() => {
     const fetchFollows = async () => {
       if (!user) return;
-      const { data } = await (supabase as any).from('follows').select('following_id').eq('follower_id', user.id);
-      if (data) setFollowingIds(data.map((f: any) => f.following_id));
+      const { data } = await supabase.from('follows').select('following_id').eq('follower_id', user.id);
+      if (data) setFollowingIds(data.map((f: { following_id: string }) => f.following_id));
     };
     fetchFollows();
   }, [supabase, user]);
-
-  const toggleFollow = useCallback(async (targetId: string) => {
-    if (!user) return;
-    const isFollowing = followingIds.includes(targetId);
-
-    if (isFollowing) {
-      const { error } = await (supabase as any).from('follows').delete().eq('follower_id', user.id).eq('following_id', targetId);
-      if (!error) {
-        setFollowingIds(prev => prev.filter(id => id !== targetId));
-        mutateVents();
-      }
-    } else {
-      const { error } = await (supabase as any).from('follows').insert({ follower_id: user.id, following_id: targetId });
-      if (!error) {
-        setFollowingIds(prev => [...prev, targetId]);
-        mutateVents();
-      }
-    }
-  }, [user, followingIds, supabase, mutateVents]);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -249,13 +279,14 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
 
   const createBubbleIcon = useCallback((emotion: string, replyCount: number, intensity?: number) => {
     const colors = getEmotionColor(emotion);
+    const emoji = getEmotionEmoji(emotion);
     return L.divIcon({
       className: 'custom-bubble-icon',
       html: `
         <div class="relative group">
            <div class="w-12 h-12 rounded-[1.5rem] ${colors.bg} backdrop-blur-md ${colors.shadow} border ${colors.border} flex items-center justify-center animate-pulse">
               <div class="flex flex-col items-center">
-                <span class="text-[10px] font-black ${colors.text} uppercase tracking-tighter leading-none">${emotion?.slice(0, 3) || 'POP'}</span>
+                <span class="text-[14px] font-black ${colors.text} leading-none">${emoji}</span>
                 ${intensity ? `<span class="text-[7px] font-bold ${colors.text} opacity-70 mt-0.5">Lvl ${intensity}</span>` : ''}
               </div>
            </div>
@@ -286,6 +317,18 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
       }
     );
   }, []);
+
+  const getVentIcon = (vent: Vent) => {
+    const colors = getEmotionColor(vent.emotion);
+    const emoji = getEmotionEmoji(vent.emotion);
+    return L.divIcon({
+      html: `<div class="relative flex items-center justify-center w-8 h-8 rounded-full border-2 ${colors.border} ${colors.bg} shadow-lg"><span class="text-lg">${emoji}</span><div class="absolute -bottom-1 w-2 h-2 bg-white rounded-full border-2 ${colors.border}"></div></div>`,
+      className: 'bg-transparent',
+      iconSize: [32, 32],
+      iconAnchor: [16, 32],
+      popupAnchor: [0, -32]
+    });
+  };
 
   if (!isMounted) {
     return (
@@ -358,7 +401,7 @@ const Map: React.FC<MapProps> = ({ view = "public" }) => {
             <Marker 
               key={vent.id} 
               position={[lat, lng]}
-              icon={createBubbleIcon(vent.emotion || 'Bubble', replyCount, (vent as any).intensity)}
+              icon={getVentIcon(vent)}
             >
               <Popup className="premium-popup">
                 <div className="p-6 bg-neutral-900 border border-white/5 text-white rounded-[2.5rem] min-w-[280px] shadow-3xl space-y-6 relative overflow-hidden">
