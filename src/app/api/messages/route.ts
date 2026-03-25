@@ -1,28 +1,33 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/libs/supabaseServer';
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient();
+  const { searchParams } = new URL(request.url);
+  const offset = parseInt(searchParams.get('offset') || '0');
+  const limit = parseInt(searchParams.get('limit') || '20');
 
-  const { data, error } = await supabase
+  const { data, error, count } = await supabase
     .from('messages')
-    .select('*, profiles (username)')
+    .select('*, profiles (username, avatar_url)', { count: 'exact' })
     .is('group_id', null)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
 
   if (error) {
     console.error('Error fetching messages:', error);
     return new NextResponse('Error fetching messages', { status: 500 });
   }
 
-  return NextResponse.json(data);
+  return NextResponse.json({ data: (data ?? []).reverse(), hasMore: (count ?? 0) > offset + limit });
 }
 
 export async function POST(request: Request) {
   const supabase = await createClient();
   const { content, user_id } = await request.json();
 
-  const { data, error } = await (supabase.from('messages') as any)
+  const { data, error } = await supabase
+    .from('messages')
     .insert([{ content, user_id, group_id: null }])
     .select()
     .single();

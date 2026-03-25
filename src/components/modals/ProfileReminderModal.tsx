@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useUser } from "@/providers/UserProvider";
+import { useUser } from "@/hooks/useUser";
 import { usePathname, useRouter } from "next/navigation";
-import Modal from "@/components/Modal";
+import Modal from "@/components/ui/Modal";
 import { HiOutlineSparkles, HiOutlineUserCircle } from "react-icons/hi2";
 
 export default function ProfileReminderModal() {
@@ -76,3 +76,4 @@ export default function ProfileReminderModal() {
     </Modal>
   );
 }
+

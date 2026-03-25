@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { useSupabase } from "@/providers/SupabaseProvider";
-import { useUser } from "@/providers/UserProvider";
+import { useEffect, useState } from 'react';
+import { useSupabase } from '@/hooks/useSupabase';
+import { useUser } from '@/hooks/useUser';
 
 export const useUnreadCount = () => {
   const { supabase } = useSupabase();
@@ -8,52 +8,25 @@ export const useUnreadCount = () => {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    if (!user) {
-      setUnreadCount(0);
-      return;
-    }
+    if (!user) return;
 
     const fetchUnreadCount = async () => {
       const { count, error } = await supabase
-        .from('direct_messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('receiver_id', user.id)
+        .from('notifications')
+        .select('* ', { count: 'exact', head: true })
+        .eq('user_id', user.id)
         .eq('is_read', false);
 
-      if (!error && count !== null) {
-        setUnreadCount(count);
+      if (!error) {
+        setUnreadCount(count || 0);
       }
     };
 
     fetchUnreadCount();
 
-    // Subscribe only to relevant changes (new messages for this user, or read status updates)
     const channel = supabase
-      .channel(`unread-dm-count-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'direct_messages',
-          filter: `receiver_id=eq.${user.id}`,
-        },
-        () => {
-          fetchUnreadCount();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'direct_messages',
-          filter: `receiver_id=eq.${user.id}`,
-        },
-        () => {
-          fetchUnreadCount();
-        }
-      )
+      .channel('public:notifications')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, fetchUnreadCount)
       .subscribe();
 
     return () => {

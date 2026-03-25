@@ -1,0 +1,1 @@
+database -> services(business logic) -> api(distributor) -> pages/components(all axios request)

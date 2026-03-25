@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/libs/supabaseServer';
+import { createLedgerEntry } from '@/services/ledgerService';
 
 export async function POST(request: Request) {
   try {
@@ -14,29 +15,17 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { emotion, intensity, note } = body;
 
-    // Use the authenticated user's ID instead of trusting the body
-    const user_id = user.id;
-
     if (!emotion) {
       return new NextResponse('Emotion is required', { status: 400 });
     }
 
-    const { data, error } = await (supabase.from('emotional_ledger') as any)
-      .insert([{ 
-        user_id, 
-        emotion, 
-        intensity: intensity || 5, 
-        note: note || "" 
-      }])
-      .select()
-      .single();
-
-    if (error) {
+    try {
+      const data = await createLedgerEntry(user.id, emotion, intensity, note);
+      return NextResponse.json(data);
+    } catch (error) {
       console.error('Error saving emotional ledger:', error);
       return new NextResponse('Error saving emotional ledger', { status: 500 });
     }
-
-    return NextResponse.json(data);
   } catch (err: any) {
     console.error('LEDGER_API_ERROR', err);
     return new NextResponse('Invalid Request Body', { status: 400 });

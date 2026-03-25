@@ -1,18 +1,32 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
-import SupabaseProvider from "@/providers/SupabaseProvider";
-import UserProvider from "@/providers/UserProvider";
+import SupabaseProvider from "@/contexts/SupabaseProvider";
+import UserProvider from "@/contexts/UserProvider";
 import ModalProvider from "@/providers/ModalProvider";
 import ToasterProvider from "@/providers/ToasterProvider";
-import Sidebar from "@/components/Sidebar";
-import MobileNav from "@/components/MobileNav";
-import PageTransition from "@/components/PageTransition";
-import NavigationLoader from "@/components/NavigationLoader";
-import ConnectionStatus from "@/components/ConnectionStatus";
-import BlackSheepAssistant from "@/components/BlackSheepAssistant";
+import Sidebar from "@/components/layout/Sidebar";
+import MobileNav from "@/components/layout/MobileNav";
+import PageTransition from "@/components/layout/PageTransition";
+import NavigationLoader from "@/components/layout/NavigationLoader";
+import ConnectionStatus from "@/components/home/ConnectionStatus";
+import BlackSheepAssistant from "@/components/chat/BlackSheepAssistant";
 import { createClient } from "@/libs/supabaseServer";
 import { getCachedTrendingFeelings } from "@/libs/cachedQueries";
+
+interface Group {
+  id: string;
+  name: string;
+}
+
+interface TrendingFeeling {
+  emotion: string;
+  count: number;
+}
+
+interface GroupMemberRow {
+  groups: Group | null;
+}
 
 export const metadata: Metadata = {
   title: {
@@ -51,8 +65,8 @@ export default async function RootLayout({
   const { data: { user } } = await supabase.auth.getUser();
 
   // Optimized server-side fetch for common layout data
-  let recentGroups: any[] = [];
-  let trendingData: any[] = [];
+  let recentGroups: Group[] = [];
+  let trendingData: TrendingFeeling[] = [];
   
   // Parallel fetch for better performance
   const [groupsRes, trendingRes] = await Promise.all([
@@ -66,7 +80,9 @@ export default async function RootLayout({
   ]);
 
   if (groupsRes.data) {
-    recentGroups = groupsRes.data.map((item: any) => item.groups);
+    recentGroups = (groupsRes.data as GroupMemberRow[])
+      .map((item) => item.groups)
+      .filter((g): g is Group => g !== null);
   }
   trendingData = trendingRes;
 
@@ -102,3 +118,4 @@ export default async function RootLayout({
     </html>
   );
 }
+

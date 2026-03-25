@@ -1,6 +1,6 @@
-import LandingClient from "@/components/LandingClient";
+import LandingClient from "@/app/(pages)/landing/page";
 import { createClient } from "@/libs/supabaseServer";
-import HomeClient from "@/components/HomeClient";
+import HomeClient from "@/app/(pages)/home/page";
 import { getCachedVents } from "@/libs/cachedQueries";
 
 export const dynamic = 'force-dynamic';
@@ -18,3 +18,4 @@ export default async function Home() {
 
   return <HomeClient initialVents={initialVents} />;
 }
+
